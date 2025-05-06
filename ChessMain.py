@@ -29,10 +29,14 @@ def main():
     clock = p.time.Clock()
     screen.fill(p.Color("white"))
     gs = ChessEngine.GameState()
+    validMoves = gs.getValidMoves()
+    moveMade = False #flag variables for when a move is made
+
     loadImages()
     running = True
     squareSelected = () #keep track of last click: tuple(row, col)
     playerClicks = [] #keep track of players click: two tuples(row_from, col_from), (row_to, col_to)
+    
     while running:
         for e in p.event.get():
             if e.type == p.QUIT:
@@ -50,10 +54,20 @@ def main():
                 if len(playerClicks) == 2:
                     move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
                     print(move.getChessNotation())
-                    gs.makeMove(move)
+                    if move in validMoves:
+                        gs.makeMove(move)
+                        moveMade = True
                     # reset player move
                     squareSelected = ()
                     playerClicks = []
+            elif e.type == p.KEYDOWN:
+                if e.key == p.K_z:
+                    gs.undoMove()
+                    moveMade = True
+                    
+        if moveMade:
+            validMoves = gs.getValidMoves()
+            moveMade = False
 
         drawGameState(screen, gs)
         clock.tick(MAX_FPS)
@@ -62,6 +76,7 @@ def main():
 def drawGameState(screen, gs):
     """
     Display gamestates
+    parameters:
     - screen: the size of the screen
     - gs: the coded gamestates
     """
@@ -71,6 +86,7 @@ def drawGameState(screen, gs):
 def drawBoard(screen):
     """
     Draw the board
+    parameters:
     - screen: the size of the screen
     """
     colors = [p.Color("white"), p.Color("gray")]
@@ -82,6 +98,7 @@ def drawBoard(screen):
 def drawPieces(screen, board):
     """
     Draw the pieces
+    parameters:
     - screen: the size of the screen
     - board: the states of pieces on the board taken out before
     """
