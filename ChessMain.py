@@ -46,6 +46,7 @@ def main():
                 col = location[0] // SQ_SIZE
                 row = location[1] // SQ_SIZE
                 if squareSelected == (row, col): #User click again (an Unclick)
+                    print("Unclicked on" + str(squareSelected[0]) + str(squareSelected[1]))
                     squareSelected = ()
                     playerClicks = []
                 else:
@@ -57,9 +58,11 @@ def main():
                     if move in validMoves:
                         gs.makeMove(move)
                         moveMade = True
-                    # reset player move
-                    squareSelected = ()
-                    playerClicks = []
+                        # reset player move
+                        squareSelected = ()
+                        playerClicks = []
+                    else:
+                        playerClicks = [squareSelected]
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z:
                     gs.undoMove()

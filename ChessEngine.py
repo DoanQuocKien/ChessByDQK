@@ -137,15 +137,117 @@ class GameState():
             moves.append(Move((r, c), (cur_r, c), self.board))
             if self.board[cur_r][c][0] == op_turn:
                 break
+
+    def insideBoard(self, r, c):
+        """
+        return if a square is inside the board
+        Parameters:
+        r, c: row and column need checking
+        """
+        if r < 0 or c < 0 or r >= len(self.board) or c >= len(self.board):
+            return False
+        return True
     
     def getKnightMoves(self, r, c, moves):
-        pass
+        """
+        Generate all possible moves for knight.
+        Parameters:
+        r, c:  row and column as positions
+        moves: list of moves
+        """
+        curr_turn = 'b'
+        if self.whiteToMove:
+            curr_turn = 'w'
+        directions = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2), (-1, -2)] #L-shaped moves
+        for i in directions:
+            if self.insideBoard(r + i[0], c + i[1]):
+                if self.board[r + i[0]][c + i[1]][0] != curr_turn:
+                    moves.append(Move((r, c), (r + i[0], c + i[1]), self.board))
+
     def getBishopMoves(self, r, c, moves):
-        pass
+        """
+        Generate all possible moves for knight.
+        Parameters:
+        r, c:  row and column as positions
+        moves: list of moves
+        """
+        curr_turn = 'b'
+        op_turn = 'w'
+        if self.whiteToMove:
+            curr_turn = 'w'
+            op_turn = 'b'
+        # Move down-right
+        currRow = r + 1
+        currColumn = c + 1
+        while self.insideBoard(currRow, currColumn):
+            if self.board[currRow][currColumn][0] == curr_turn:
+                break
+            moves.append(Move((r, c), (currRow, currColumn), self.board))
+            if self.board[currRow][currColumn][0] == op_turn:
+                break
+            currRow += 1
+            currColumn += 1
+        
+        #Move down-left
+        currRow = r + 1
+        currColumn = c - 1
+        while self.insideBoard(currRow, currColumn):
+            if self.board[currRow][currColumn][0] == curr_turn:
+                break
+            moves.append(Move((r, c), (currRow, currColumn), self.board))
+            if self.board[currRow][currColumn][0] == op_turn:
+                break
+            currRow += 1
+            currColumn -= 1
+
+        #Move up-right
+        currRow = r - 1
+        currColumn = c + 1
+        while self.insideBoard(currRow, currColumn):
+            if self.board[currRow][currColumn][0] == curr_turn:
+                break
+            moves.append(Move((r, c), (currRow, currColumn), self.board))
+            if self.board[currRow][currColumn][0] == op_turn:
+                break
+            currRow -= 1
+            currColumn += 1
+        
+        #Move up-left
+        currRow = r - 1
+        currColumn = c - 1
+        while self.insideBoard(currRow, currColumn):
+            if self.board[currRow][currColumn][0] == curr_turn:
+                break
+            moves.append(Move((r, c), (currRow, currColumn), self.board))
+            if self.board[currRow][currColumn][0] == op_turn:
+                break
+            currRow -= 1
+            currColumn -= 1
     def getQueenMoves(self, r, c, moves):
-        pass
+        """
+        Generate all possible moves for queen. Since queen are basically rook and bishop combine, we could just get the rook and bishop moves at this piece
+        Parameters:
+        r, c:  row and column as positions
+        moves: list of moves
+        """
+        self.getRookMoves(r, c, moves)
+        self.getBishopMoves(r, c, moves)
+
     def getKingMoves(self, r, c, moves):
-        pass
+        """
+        Generate all possible moves for king.
+        Parameters:
+        r, c:  row and column as positions
+        moves: list of moves
+        """
+        curr_turn = 'b'
+        if self.whiteToMove:
+            curr_turn = 'w'
+        directions = [(0, 1), (0, -1), (-1, 1), (-1, -1), (1, 0), (-1, 0), (1, 1), (1, -1)] #one-space moves
+        for i in directions:
+            if self.insideBoard(r + i[0], c + i[1]):
+                if self.board[r + i[0]][c + i[1]][0] != curr_turn:
+                    moves.append(Move((r, c), (r + i[0], c + i[1]), self.board))
         
 class Move():
     """
