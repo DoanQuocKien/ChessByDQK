@@ -46,19 +46,19 @@ def main():
                 col = location[0] // SQ_SIZE
                 row = location[1] // SQ_SIZE
                 if squareSelected == (row, col): #User click again (an Unclick)
-                    print("Unclicked on" + str(squareSelected[0]) + str(squareSelected[1]))
                     squareSelected = ()
                     playerClicks = []
                 else:
+                    
                     squareSelected = (row, col)
                     playerClicks.append(squareSelected)
                 if len(playerClicks) == 2:
                     move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
-                    print(move.getChessNotation())
                     for possible_move in validMoves:
                         if move == possible_move:
                             gs.makeMove(possible_move)
                             moveMade = True
+                            print("Debugging")
                             # reset player move
                             squareSelected = ()
                             playerClicks = []
