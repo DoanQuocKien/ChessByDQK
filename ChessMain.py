@@ -140,21 +140,20 @@ def promotionMenu(screen, color):
     Returns:
     - The chosen piece ('Q', 'R', 'B', 'N')
     """
-    font = p.font.SysFont("Arial", 32)
     options = ['Q', 'R', 'B', 'N']
-    menuWidth = 200
-    menuHeight = 100
+    pieceImages = [IMAGES[color + option] for option in options]  # Get images for the promotion options
+    menuWidth = 4 * SQ_SIZE
+    menuHeight = SQ_SIZE
     menuX = (WIDTH - menuWidth) // 2
     menuY = (HEIGHT - menuHeight) // 2
     optionRects = []
 
     # Draw menu background
     p.draw.rect(screen, p.Color("gray"), (menuX, menuY, menuWidth, menuHeight))
-    for i, option in enumerate(options):
-        text = font.render(option, True, p.Color("black"))
-        rect = text.get_rect(center=(menuX + (i + 1) * menuWidth // 5, menuY + menuHeight // 2))
-        optionRects.append((rect, option))
-        screen.blit(text, rect)
+    for i, pieceImage in enumerate(pieceImages):
+        rect = p.Rect(menuX + i * SQ_SIZE, menuY, SQ_SIZE, SQ_SIZE)
+        optionRects.append((rect, options[i]))
+        screen.blit(pieceImage, rect)
 
     p.display.flip()
 
