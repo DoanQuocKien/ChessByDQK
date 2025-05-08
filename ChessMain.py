@@ -55,13 +55,14 @@ def main():
                 if len(playerClicks) == 2:
                     move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
                     print(move.getChessNotation())
-                    if move in validMoves:
-                        gs.makeMove(move)
-                        moveMade = True
-                        # reset player move
-                        squareSelected = ()
-                        playerClicks = []
-                    else:
+                    for possible_move in validMoves:
+                        if move == possible_move:
+                            gs.makeMove(possible_move)
+                            moveMade = True
+                            # reset player move
+                            squareSelected = ()
+                            playerClicks = []
+                    if not moveMade: #if the move is invalid, reset player clicks
                         playerClicks = [squareSelected]
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z:
