@@ -53,10 +53,10 @@ class GameState():
         elif move.pieceMoved == 'bK':
             self.blackKingLocation = (move.endRow, move.endCol)
 
-        #pawn promotion
         if move.pawnPromotion:
-            self.board[move.endRow][move.endCol] = 'wQ' if move.pieceMoved == "wp" else 'bQ'
-
+            promotionPiece = move.promotionChoice if move.promotionChoice else 'Q'  # Default to Queen
+            self.board[move.endRow][move.endCol] = ('w' if move.pieceMoved == 'wp' else 'b') + promotionPiece
+        
         #en passant
         if move.isEnPassantMove:
             self.board[move.startRow][move.endCol] = '--' #capturing the pawn
@@ -465,7 +465,7 @@ class Move():
     colsToFiles = {v: k for k, v in filesToCols.items()}
 
 
-    def __init__(self, startSquare, endSquare, board, isEnPassantMove = False, isCastleMove = False):
+    def __init__(self, startSquare, endSquare, board, isEnPassantMove = False, isCastleMove = False, promotionChoice = None):
         self.startRow = startSquare[0]
         self.startCol = startSquare[1]
         self.endRow = endSquare[0]
@@ -476,6 +476,7 @@ class Move():
 
         #pawn promotion
         self.pawnPromotion = (self.pieceMoved == 'wp' and self.endRow == 0) or (self.pieceMoved == 'bp' and self.endRow == 7)
+        self.promotionChoice = promotionChoice
 
         #en passant
         self.isEnPassantMove = isEnPassantMove

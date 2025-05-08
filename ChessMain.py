@@ -10,8 +10,6 @@ SQ_SIZE = HEIGHT // DIMENSION
 MAX_FPS = 15 #for animation
 IMAGES = {}
 
-
-
 def loadImages():
     """
     Initialize a global dictionary of chess pieces. Call once
@@ -56,13 +54,15 @@ def main():
                     move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
                     for possible_move in validMoves:
                         if move == possible_move:
-                            gs.makeMove(possible_move)
+                            promotionChoice = None
+                            if possible_move.pawnPromotion:
+                                promotionChoice = promotionMenu(screen, 'w' if gs.whiteToMove else 'b')
+                            move.promotionChoice = promotionChoice  # Set the promotion choice in the Move object
+                            gs.makeMove(move)
                             moveMade = True
-                            print("Debugging")
-                            # reset player move
                             squareSelected = ()
                             playerClicks = []
-                    if not moveMade: #if the move is invalid, reset player clicks
+                    if not moveMade:  # If the move is invalid, reset player clicks
                         playerClicks = [squareSelected]
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z:
@@ -131,6 +131,42 @@ def drawPieces(screen, board):
             if piece != "--": #not empty square
                 screen.blit(IMAGES[piece], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
+def promotionMenu(screen, color):
+    """
+    Display a promotion menu for the player to choose a piece.
+    Parameters:
+    - screen: the Pygame screen
+    - color: 'w' for white, 'b' for black
+    Returns:
+    - The chosen piece ('Q', 'R', 'B', 'N')
+    """
+    font = p.font.SysFont("Arial", 32)
+    options = ['Q', 'R', 'B', 'N']
+    menuWidth = 200
+    menuHeight = 100
+    menuX = (WIDTH - menuWidth) // 2
+    menuY = (HEIGHT - menuHeight) // 2
+    optionRects = []
+
+    # Draw menu background
+    p.draw.rect(screen, p.Color("gray"), (menuX, menuY, menuWidth, menuHeight))
+    for i, option in enumerate(options):
+        text = font.render(option, True, p.Color("black"))
+        rect = text.get_rect(center=(menuX + (i + 1) * menuWidth // 5, menuY + menuHeight // 2))
+        optionRects.append((rect, option))
+        screen.blit(text, rect)
+
+    p.display.flip()
+
+    # Wait for player to click an option
+    while True:
+        for e in p.event.get():
+            if e.type == p.MOUSEBUTTONDOWN:
+                mouseX, mouseY = e.pos
+                for rect, option in optionRects:
+                    if rect.collidepoint(mouseX, mouseY):
+                        return option
+    
 if __name__ == "__main__":
     main()
 
