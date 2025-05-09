@@ -37,12 +37,13 @@ class GameState():
         self.currentCastlingRight = CastleRight(True, True, True, True)
         self.castleRightsLog = [copy.deepcopy(self.currentCastlingRight)]
         self.enPassantPossiblelog = [()]
+        self.simulation = False
     
     def makeMove(self, move):
         """
         Make a chess move.
         parameter:
-        - move: the Move() object, to take the position, notation, etc.
+        - move: the Move() object, to take the position, notation, pieces etc.
         """
         self.board[move.startRow][move.startCol] = "--"
         self.board[move.endRow][move.endCol] = move.pieceMoved
@@ -69,16 +70,17 @@ class GameState():
             self.enPassantPossible = ()
             self.enPassantPossiblelog.append(())
         
-        #update castling rights - whenever it is a rook or a king move
-        print(self.currentCastlingRight.wks, self.currentCastlingRight.bks, self.currentCastlingRight.wqs, self.currentCastlingRight.bqs)
-        print("moving")
-        for log in self.castleRightsLog:
-            print(str(log.wks) + " " + str(log.bks) + " " + str(log.wqs) + " " + str(log.bqs), end = ",")
-        print()        
+        #update castling rights - whenever it is a rook or a king move      
         self.updateCastleRights(move)
         self.castleRightsLog.append(copy.deepcopy(self.currentCastlingRight))
-        print(self.currentCastlingRight.wks, self.currentCastlingRight.bks, self.currentCastlingRight.wqs, self.currentCastlingRight.bqs)
-        print("switch to undoing")
+        
+        if (not self.simulation) and (not self.whiteToMove):
+            print(move.startRow, end = ',')
+            print(move.startCol, end = ',')
+            print(move.endRow, end = ',')
+            print(move.endCol, end = ',')
+            print(move.isCastleMove)
+            
         #castle
         if move.isCastleMove:
             if move.endCol - move.startCol == 2: #Kingside castle move
@@ -148,15 +150,9 @@ class GameState():
             self.enPassantPossible = copy.deepcopy(self.enPassantPossiblelog[-1])
             
             #undo castling right
-            print(self.currentCastlingRight.wks, self.currentCastlingRight.bks, self.currentCastlingRight.wqs, self.currentCastlingRight.bqs)
-            print("undoing")
-            for log in self.castleRightsLog:
-                print(str(log.wks) + " " + str(log.bks) + " " + str(log.wqs) + " " + str(log.bqs), end = ",")
-            print()
             self.castleRightsLog.pop()
             self.currentCastlingRight = copy.deepcopy(self.castleRightsLog[-1])
-            print(self.currentCastlingRight.wks, self.currentCastlingRight.bks, self.currentCastlingRight.wqs, self.currentCastlingRight.bqs)
-            print("debug")
+
             #undo castle move
             if move.isCastleMove:
                 if move.endCol - move.startCol == 2: #kingside
@@ -194,12 +190,14 @@ class GameState():
         else:
             self.getCastleMoves(self.blackKingLocation[0], self.blackKingLocation[1], moves)
         for i in range(len(moves) - 1, -1, -1):
+            self.simulation = True
             self.makeMove(moves[i])
             self.whiteToMove = not self.whiteToMove
             if self.inCheck():
                 moves.remove(moves[i])
             self.whiteToMove = not self.whiteToMove
             self.undoMove()
+            self.simulation = False
         if len(moves) == 0: #either checkmate or stalemate
             if self.inCheck():
                 self.checkMate = True
@@ -435,13 +433,13 @@ class GameState():
             return #can't castle while checked
 
         #Kingside Castle Moves
-        if (self.whiteToMove and self.currentCastlingRight.wks) or (not self.whiteToMove and self.currentCastlingRight.bks):
+        if (self.whiteToMove and self.currentCastlingRight.wks) or ((not self.whiteToMove) and self.currentCastlingRight.bks):
             if self.board[r][c + 1] == "--" and self.board[r][c + 2] == "--":
                 if not self.squareUnderAttack(r, c + 1) and not self.squareUnderAttack(r, c + 2):
                     moves.append(Move((r, c), (r, c + 2), self.board, isCastleMove=True))
 
         #Queenside Castle Moves           
-        if (self.whiteToMove and self.currentCastlingRight.wqs) or (not self.whiteToMove and self.currentCastlingRight.bqs):
+        if (self.whiteToMove and self.currentCastlingRight.wqs) or ((not self.whiteToMove) and self.currentCastlingRight.bqs):
             if self.board[r][c - 1] == "--" and self.board[r][c - 2] == "--":
                 if not self.squareUnderAttack(r, c - 1) and not self.squareUnderAttack(r, c - 2):
                     moves.append(Move((r, c), (r, c - 2), self.board, isCastleMove=True))
