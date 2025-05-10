@@ -32,12 +32,13 @@ class GameState():
         self.whiteKingLocation = (7, 4) # for checking if the king is in check
         self.blackKingLocation = (0, 4) # for checking if the king is in check
         self.checkMate = False # checkmate or not
-        self.staleMate = False # stalemate or not
+        self.draw = False # draw or not
         self.enPassantPossible = () # store the square of the pawn that can be captured by en passant
         self.currentCastlingRight = CastleRight(True, True, True, True)
         self.castleRightsLog = [copy.deepcopy(self.currentCastlingRight)]
         self.enPassantPossiblelog = [()]
         self.simulation = False
+        self.positionCounts = {}
     
     def makeMove(self, move):
         """
@@ -73,14 +74,7 @@ class GameState():
         #update castling rights - whenever it is a rook or a king move      
         self.updateCastleRights(move)
         self.castleRightsLog.append(copy.deepcopy(self.currentCastlingRight))
-        
-        if (not self.simulation) and (not self.whiteToMove):
-            print(move.startRow, end = ',')
-            print(move.startCol, end = ',')
-            print(move.endRow, end = ',')
-            print(move.endCol, end = ',')
-            print(move.isCastleMove)
-            
+                    
         #castle
         if move.isCastleMove:
             if move.endCol - move.startCol == 2: #Kingside castle move
@@ -89,7 +83,20 @@ class GameState():
             else:
                 self.board[move.endRow][move.endCol + 1] = self.board[move.endRow][move.endCol - 2] #moves the rook
                 self.board[move.endRow][move.endCol - 2] = "--"
-
+        
+        # Update position counts for threefold repetition
+        boardString = self.getBoardString()
+        if boardString in self.positionCounts:
+            self.positionCounts[boardString] += 1
+        else:
+            self.positionCounts[boardString] = 1
+    
+    def getBoardString(self):
+        """
+        Generate a string representation of the board for threefold repetition.
+        """
+        return ''.join([''.join(row) for row in self.board]) + ('w' if self.whiteToMove else 'b')
+    
     def updateCastleRights(self, move):
         """
         Update Castling right when a piece moved
@@ -161,6 +168,11 @@ class GameState():
                 else:
                     self.board[move.endRow][move.endCol - 2] = self.board[move.endRow][move.endCol + 1]
                     self.board[move.endRow][move.endCol + 1] = "--"
+            
+            # Decrement position count for threefold repetition
+            boardString = self.getBoardString()
+            if boardString in self.positionCounts:
+                self.positionCounts[boardString] -= 1
 
     def squareUnderAttack(self, r, c):
         """
@@ -198,14 +210,18 @@ class GameState():
             self.whiteToMove = not self.whiteToMove
             self.undoMove()
             self.simulation = False
-        if len(moves) == 0: #either checkmate or stalemate
+        if len(moves) == 0: #either checkmate or draw
             if self.inCheck():
                 self.checkMate = True
             else:
-                self.staleMate = True
+                self.draw = True
+            return []
         else:
             self.checkMate = False
-            self.staleMate = False
+            self.draw = False
+        if any(count >= 3 for count in self.positionCounts.values()):
+            self.staleMate = True
+            return []
         self.enPassantPossible = tempEnpassantPossible
         self.currentCastlingRight = tempCastleRight
         return moves

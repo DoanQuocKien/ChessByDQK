@@ -92,9 +92,9 @@ def main():
             p.display.flip()
 
             # Check for game over
-            if gs.checkMate or gs.staleMate:
-                result = "White Wins by checkmate" if gs.checkMate and not gs.whiteToMove else \
-                        "Black Wins by checkmate" if gs.checkMate and gs.whiteToMove else "Draw"
+            if gs.checkMate or gs.draw:
+                result = "White Wins" if gs.checkMate and not gs.whiteToMove else \
+                        "Black Wins" if gs.checkMate and gs.whiteToMove else "Draw"
                 endingScreen(screen, result, gs)  # Pass the game state to the ending screen
                 break  # Break out of the game loop to return to the main menu
             
