@@ -4,6 +4,8 @@ Main file to recieve user inputs and displaying chess matches (CurrentGameState 
 import pygame as p
 import ChessEngine
 import copy
+import SmartMoveFinder
+import time
 
 WIDTH = HEIGHT = 514
 DIMENSION = 8 #dimensions of a chess board are 8x8
@@ -36,6 +38,8 @@ def main():
         gs.whiteToMove = playAsWhite  # Set the starting player based on the menu choice
         validMoves = gs.getValidMoves()
         moveMade = False  # Flag variables for when a move is made
+        playerOne = False # True if a Human is playing white
+        playerTwo = False # True if a Human is playing black
 
         loadImages()
         running = True
@@ -43,35 +47,37 @@ def main():
         playerClicks = []  # Keep track of players click: two tuples(row_from, col_from), (row_to, col_to)
 
         while running:
+            humanTurn = (gs.whiteToMove and playerOne) or (not gs.whiteToMove and playerTwo)
             for e in p.event.get():
                 if e.type == p.QUIT:
                     p.quit()
                     exit()
                 elif e.type == p.MOUSEBUTTONDOWN:
-                    location = p.mouse.get_pos()  # x, y location of mouse
-                    col = location[0] // SQ_SIZE
-                    row = location[1] // SQ_SIZE
-                    if squareSelected == (row, col):  # User clicked the same square twice
-                        squareSelected = ()
-                        playerClicks = []
-                    else:
-                        squareSelected = (row, col)
-                        playerClicks.append(squareSelected)
-                    if len(playerClicks) == 2:
-                        move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
-                        for possible_move in validMoves:
-                            if move == possible_move:
-                                move = copy.deepcopy(possible_move)
-                                promotionChoice = None
-                                if possible_move.pawnPromotion:
-                                    promotionChoice = promotionMenu(screen, 'w' if gs.whiteToMove else 'b')
-                                move.promotionChoice = promotionChoice  # Set the promotion choice in the Move object
-                                gs.makeMove(move)
-                                moveMade = True
-                                squareSelected = ()
-                                playerClicks = []
-                        if not moveMade:  # If the move is invalid, reset player clicks
-                            playerClicks = [squareSelected]
+                    if humanTurn:
+                        location = p.mouse.get_pos()  # x, y location of mouse
+                        col = location[0] // SQ_SIZE
+                        row = location[1] // SQ_SIZE
+                        if squareSelected == (row, col):  # User clicked the same square twice
+                            squareSelected = ()
+                            playerClicks = []
+                        else:
+                            squareSelected = (row, col)
+                            playerClicks.append(squareSelected)
+                        if len(playerClicks) == 2:
+                            move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
+                            for possible_move in validMoves:
+                                if move == possible_move:
+                                    move = copy.deepcopy(possible_move)
+                                    promotionChoice = None
+                                    if possible_move.pawnPromotion:
+                                        promotionChoice = promotionMenu(screen, 'w' if gs.whiteToMove else 'b')
+                                    move.promotionChoice = promotionChoice  # Set the promotion choice in the Move object
+                                    gs.makeMove(move)
+                                    moveMade = True
+                                    squareSelected = ()
+                                    playerClicks = []
+                            if not moveMade:  # If the move is invalid, reset player clicks
+                                playerClicks = [squareSelected]
                 elif e.type == p.KEYDOWN:
                     if e.key == p.K_z:  # Undo move
                         gs.undoMove()
@@ -91,6 +97,17 @@ def main():
                         "Black Wins by checkmate" if gs.checkMate and gs.whiteToMove else "Draw"
                 endingScreen(screen, result, gs)  # Pass the game state to the ending screen
                 break  # Break out of the game loop to return to the main menu
+            
+            # AI turn
+            if not humanTurn:
+                AImove = SmartMoveFinder.findRandomMove(validMoves)
+                gs.makeMove(AImove)
+                moveMade = True
+
+            if moveMade:
+                validMoves = gs.getValidMoves()
+                moveMade = False
+
 def highlightSquare(screen, gs, validMoves, sqSelected):
     """
     Highlight square selected and moves for piece selected

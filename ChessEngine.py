@@ -1,5 +1,5 @@
 """
-This class is responsible for starting all the information
+This file is responsible for starting all the information
 And determining the valid moves at the current state
 Basically all of the background things
 """
