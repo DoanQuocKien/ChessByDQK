@@ -39,6 +39,7 @@ class GameState():
         self.enPassantPossiblelog = [()]
         self.simulation = False
         self.positionCounts = {}
+        self.fiftyMoveCounter = 0
     
     def makeMove(self, move):
         """
@@ -48,7 +49,7 @@ class GameState():
         """
         self.board[move.startRow][move.startCol] = "--"
         self.board[move.endRow][move.endCol] = move.pieceMoved
-        self.moveLog.append(move) #log the move so we can undo it later
+        self.moveLog.append((move, copy.deepcopy(self.fiftyMoveCounter))) #log the move so we can undo it later
         self.whiteToMove = not self.whiteToMove #switch players
         if move.pieceMoved == 'wK':
             self.whiteKingLocation = (move.endRow, move.endCol)
@@ -90,7 +91,13 @@ class GameState():
             self.positionCounts[boardString] += 1
         else:
             self.positionCounts[boardString] = 1
-    
+        
+        # Update fifty-move counter
+        if move.pieceMoved[1] == 'p' or move.pieceCaptured != "--":
+            self.fiftyMoveCounter = 0  # Reset counter on pawn move or capture
+        else:
+            self.fiftyMoveCounter += 1
+
     def getBoardString(self):
         """
         Generate a string representation of the board for threefold repetition.
@@ -140,7 +147,7 @@ class GameState():
         Undo the last move made
         """
         if len(self.moveLog) != 0:
-            move = self.moveLog.pop()
+            move, self.fiftyMoveCounter = self.moveLog.pop()
             self.board[move.startRow][move.startCol] = move.pieceMoved
             self.board[move.endRow][move.endCol] = move.pieceCaptured
             if move.pieceMoved == 'wK':
@@ -173,6 +180,50 @@ class GameState():
             boardString = self.getBoardString()
             if boardString in self.positionCounts:
                 self.positionCounts[boardString] -= 1
+
+    def insufficientMaterial(self):
+        """
+        Check if there is insufficient material to continue the game.
+        Returns:
+        - True if the game is a draw due to insufficient material, False otherwise.
+        """
+        # Flatten the board to get all pieces
+        pieces = [piece for row in self.board for piece in row if piece != "--"]
+
+        # If only kings are left
+        if pieces == ["wK", "bK"]:
+            return True
+
+        # If one side has a king and a bishop or a knight, and the other side only has a king
+        if len(pieces) == 3:
+            if "wK" in pieces and "bK" in pieces:
+                if "wB" in pieces or "wN" in pieces or "bB" in pieces or "bN" in pieces:
+                    return True
+
+        # If both sides have a king and a bishop, check if the bishops are on the same color
+        if len(pieces) == 4:
+            if "wK" in pieces and "bK" in pieces and "wB" in pieces and "bB" in pieces:
+                whiteBishopSquare = None
+                blackBishopSquare = None
+                for r in range(len(self.board)):
+                    for c in range(len(self.board[r])):
+                        if self.board[r][c] == "wB":
+                            whiteBishopSquare = (r, c)
+                        elif self.board[r][c] == "bB":
+                            blackBishopSquare = (r, c)
+                if whiteBishopSquare and blackBishopSquare:
+                    # Check if both bishops are on the same color
+                    if (whiteBishopSquare[0] + whiteBishopSquare[1]) % 2 == (blackBishopSquare[0] + blackBishopSquare[1]) % 2:
+                        return True
+
+        # King with two knights vs. King
+        if len(pieces) == 4:
+            if "wK" in pieces and "bK" in pieces:
+                if pieces.count("wN") == 2 or pieces.count("bN") == 2:
+                    return True
+
+        # Otherwise, there is sufficient material
+        return False
 
     def squareUnderAttack(self, r, c):
         """
@@ -219,8 +270,14 @@ class GameState():
         else:
             self.checkMate = False
             self.draw = False
+        if self.fiftyMoveCounter >= 50:
+            self.draw = True
+            return []
         if any(count >= 3 for count in self.positionCounts.values()):
-            self.staleMate = True
+            self.draw = True
+            return []
+        if self.insufficientMaterial():
+            self.draw = True
             return []
         self.enPassantPossible = tempEnpassantPossible
         self.currentCastlingRight = tempCastleRight
