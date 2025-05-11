@@ -43,7 +43,7 @@ class GameState():
                                                             )]
         self.enPassantPossibleLog = [()]
         self.simulation = False
-        self.positionCounts = {}
+        self.positionCounts = {self.getBoardHash() : 1}
         self.fiftyMoveCounter = 0
     
     def makeMove(self, move):
@@ -54,7 +54,6 @@ class GameState():
         """
         self.board[move.startRow][move.startCol] = "--"
         self.board[move.endRow][move.endCol] = move.pieceMoved
-        self.moveLog.append((move, self.fiftyMoveCounter)) #log the move so we can undo it later
         self.whiteToMove = not self.whiteToMove #switch players
         if move.pieceMoved == 'wK':
             self.whiteKingLocation = (move.endRow, move.endCol)
@@ -96,7 +95,7 @@ class GameState():
                 self.board[move.endRow][move.endCol - 2] = "--"
         
         # Update position counts for threefold repetition
-        boardString = self.getBoardString()
+        boardString = self.getBoardHash()
         if boardString in self.positionCounts:
             self.positionCounts[boardString] += 1
         else:
@@ -107,21 +106,16 @@ class GameState():
             self.fiftyMoveCounter = 0  # Reset counter on pawn move or capture
         else:
             self.fiftyMoveCounter += 1
+        self.moveLog.append((move, self.fiftyMoveCounter)) #log the move so we can undo it later
 
-    def getBoardString(self):
+    def getBoardHash(self):
         """
-        Generate a string representation of the board for threefold repetition.
-        Includes:
-        - Board layout
-        - Current player's turn
-        - En passant possibility
-        - Castling rights
+        Generate a hash representation of the board for threefold repetition.
         """
-        boardString = ''.join([''.join(row) for row in self.board])  # Board layout
-        boardString += 'w' if self.whiteToMove else 'b'  # Current player's turn
-        boardString += str(self.enPassantPossible)  # En passant possibility
-        boardString += f"{self.currentCastlingRight.wks}{self.currentCastlingRight.wqs}{self.currentCastlingRight.bks}{self.currentCastlingRight.bqs}"  # Castling rights
-        return boardString
+        return hash((
+            tuple(tuple(row) for row in self.board),  # Board layout
+            self.whiteToMove,  # Current player's turn
+        ))
     
     def updateCastleRights(self, move):
         """
@@ -169,9 +163,11 @@ class GameState():
             move, self.fiftyMoveCounter = self.moveLog.pop()
 
             # Decrement position count for threefold repetition
-            boardString = self.getBoardString()
+            boardString = self.getBoardHash()
             if boardString in self.positionCounts:
                 self.positionCounts[boardString] -= 1
+                if self.positionCounts[boardString] == 0:
+                    del self.positionCounts[boardString]
             
             self.board[move.startRow][move.startCol] = move.pieceMoved
             self.board[move.endRow][move.endCol] = move.pieceCaptured
@@ -216,106 +212,135 @@ class GameState():
     def insufficientMaterial(self):
         """
         Check if there is insufficient material to continue the game.
-        Returns:
-        - True if the game is a draw due to insufficient material, False otherwise.
         """
-        # Flatten the board to get all pieces
-        pieces = [piece for row in self.board for piece in row if piece != "--"]
+        pieces = [piece[1] for row in self.board for piece in row if piece != "--"]
 
-        # If only kings are left
-        if pieces == ["wK", "bK"]:
+        # King vs. King
+        if pieces == ["K", "K"]:
             return True
 
-        # If one side has a king and a bishop or a knight, and the other side only has a king
-        if len(pieces) == 3:
-            if "wK" in pieces and "bK" in pieces:
-                if "wB" in pieces or "wN" in pieces or "bB" in pieces or "bN" in pieces:
-                    return True
+        # King and Bishop/Knight vs. King
+        if len(pieces) == 3 and pieces.count("K") == 2 and ("B" in pieces or "N" in pieces):
+            return True
 
-        # If both sides have a king and a bishop, check if the bishops are on the same color
-        if len(pieces) == 4:
-            if "wK" in pieces and "bK" in pieces and "wB" in pieces and "bB" in pieces:
-                whiteBishopSquare = None
-                blackBishopSquare = None
-                for r in range(len(self.board)):
-                    for c in range(len(self.board[r])):
-                        if self.board[r][c] == "wB":
-                            whiteBishopSquare = (r, c)
-                        elif self.board[r][c] == "bB":
-                            blackBishopSquare = (r, c)
-                if whiteBishopSquare and blackBishopSquare:
-                    # Check if both bishops are on the same color
-                    if (whiteBishopSquare[0] + whiteBishopSquare[1]) % 2 == (blackBishopSquare[0] + blackBishopSquare[1]) % 2:
-                        return True
+        # King and Bishop vs. King and Bishop (same-colored bishops)
+        if len(pieces) == 4 and pieces.count("K") == 2 and pieces.count("B") == 2:
+            bishops = [(r, c) for r, row in enumerate(self.board) for c, piece in enumerate(row) if piece[1] == "B"]
+            if (bishops[0][0] + bishops[0][1]) % 2 == (bishops[1][0] + bishops[1][1]) % 2:
+                return True
 
-        # King with two knights vs. King
-        if len(pieces) == 4:
-            if "wK" in pieces and "bK" in pieces:
-                if pieces.count("wN") == 2 or pieces.count("bN") == 2:
-                    return True
-
-        # Otherwise, there is sufficient material
         return False
 
     def squareUnderAttack(self, r, c):
         """
-        Check if the square is under attack by the opponent
+        Check if a square is attacked by the opponent.
         Parameters:
-        r, c: row and column of the square to check
+        - r, c: Row and column of the square to check.
+        Returns:
+        - True if the square is attacked, False otherwise.
         """
-        self.whiteToMove = not self.whiteToMove #switch players
-        # check if the square is under attack by the opponent
-        oppMoves = self.getAllPossibleMoves()
-        self.whiteToMove = not self.whiteToMove #switch players back
-        return any(move.endRow == r and move.endCol == c for move in oppMoves)
+        attackingColor = 'w' if not self.whiteToMove else 'b'  # Determine the attacking color based on whiteToMove
+        directions = {
+            'knight': [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2), (-1, -2)],
+            'king': [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)],
+            'rook': [(0, 1), (0, -1), (1, 0), (-1, 0)],
+            'bishop': [(1, 1), (1, -1), (-1, 1), (-1, -1)],
+        }
+
+        # Check for pawn attacks
+        pawnDirection = -1 if attackingColor == 'b' else 1
+        if self.insideBoard(r + pawnDirection, c - 1) and self.board[r + pawnDirection][c - 1] == attackingColor + 'p':
+            return True
+        if self.insideBoard(r + pawnDirection, c + 1) and self.board[r + pawnDirection][c + 1] == attackingColor + 'p':
+            return True
+
+        # Check for knight attacks
+        for dr, dc in directions['knight']:
+            if self.insideBoard(r + dr, c + dc) and self.board[r + dr][c + dc] == attackingColor + 'N':
+                return True
+
+        # Check for rook and queen attacks (horizontal and vertical)
+        for dr, dc in directions['rook']:
+            for i in range(1, 8):
+                nr, nc = r + dr * i, c + dc * i
+                if not self.insideBoard(nr, nc):
+                    break
+                piece = self.board[nr][nc]
+                if piece != "--":
+                    if piece == attackingColor + 'R' or piece == attackingColor + 'Q':
+                        return True
+                    break
+
+        # Check for bishop and queen attacks (diagonals)
+        for dr, dc in directions['bishop']:
+            for i in range(1, 8):
+                nr, nc = r + dr * i, c + dc * i
+                if not self.insideBoard(nr, nc):
+                    break
+                piece = self.board[nr][nc]
+                if piece != "--":
+                    if piece == attackingColor + 'B' or piece == attackingColor + 'Q':
+                        return True
+                    break
+
+        # Check for king attacks
+        for dr, dc in directions['king']:
+            if self.insideBoard(r + dr, c + dc) and self.board[r + dr][c + dc] == attackingColor + 'K':
+                return True
+
+        return False
 
     def getValidMoves(self):
         """
-        Moves considering checks + castling
+        Generate all valid moves considering checks, castling, and special rules.
         """
-        tempEnpassantPossible = self.enPassantPossible
-        tempCastleRight = CastleRight(self.currentCastlingRight.wks, self.currentCastlingRight.bks,
-                                      self.currentCastlingRight.wqs, self.currentCastlingRight.bqs)
+        before = dict(self.positionCounts)
         moves = self.getAllPossibleMoves()
 
+        # Add castling moves
         if self.whiteToMove:
             self.getCastleMoves(self.whiteKingLocation[0], self.whiteKingLocation[1], moves)
         else:
             self.getCastleMoves(self.blackKingLocation[0], self.blackKingLocation[1], moves)
-        
-        for i in range(len(moves) - 1, -1, -1):
-            self.simulation = True
-            self.makeMove(moves[i])
+
+        # Filter out moves that leave the king in check
+        validMoves = []
+        for move in moves:
+            self.makeMove(move)
             self.whiteToMove = not self.whiteToMove
-            if self.inCheck():
-                moves.remove(moves[i])
+            if not self.inCheck():
+                validMoves.append(move)
             self.whiteToMove = not self.whiteToMove
             self.undoMove()
-            self.simulation = False
-        if len(moves) == 0: #either checkmate or draw
+        
+        after = self.positionCounts
+        if before != after:
+            print("=== positionCounts mutated during getValidMoves! ===")
+            for k in set(before) | set(after):
+                b = before.get(k, 0)
+                a = after.get(k, 0)
+                if a != b:
+                    print(f"  hash {k}: before={b}, after={a}")
+        # Handle draw conditions
+        if not validMoves:
             if self.inCheck():
                 self.checkMate = True
             else:
                 self.draw = True
-            return []
         elif self.fiftyMoveCounter >= 50:
             self.draw = True
-            print("Draw by 50-move")
-            return []
-        elif any(count >= 3 for count in self.positionCounts.values()):
+            print("Draw by 50-move rule")
+        elif any(count >= 3 for count in list(self.positionCounts.values())):
             self.draw = True
-            print("Draw by repetition")
-            return []
+            print("Draw by threefold repetition")
         elif self.insufficientMaterial():
             self.draw = True
             print("Draw by insufficient material")
-            return []
         else:
             self.checkMate = False
             self.draw = False
-        self.enPassantPossible = tempEnpassantPossible
-        self.currentCastlingRight = tempCastleRight
-        return moves
+
+        return validMoves
     
     def inCheck(self):
         """
@@ -328,15 +353,14 @@ class GameState():
 
     def getAllPossibleMoves(self):
         """
-        Moves not considering checks
+        Generate all possible moves without considering checks.
         """
         moves = []
-        for r in range(len(self.board)):
-            for c in range(len(self.board[r])):
-                turn = self.board[r][c][0]
-                if (turn == 'w' and self.whiteToMove) or (turn == 'b' and not self.whiteToMove):
-                    piece = self.board[r][c][1]
-                    self.moveFunctions[piece](r, c, moves)
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if piece != "--" and ((piece[0] == 'w' and self.whiteToMove) or (piece[0] == 'b' and not self.whiteToMove)):
+                    self.moveFunctions[piece[1]](r, c, moves)
         return moves
 
     def getPawnMoves(self, r, c, moves):
@@ -422,9 +446,7 @@ class GameState():
         Parameters:
         r, c: row and column need checking
         """
-        if r < 0 or c < 0 or r >= len(self.board) or c >= len(self.board):
-            return False
-        return True
+        return 0 <= r < 8 and 0 <= c < 8
     
     def getKnightMoves(self, r, c, moves):
         """
@@ -529,25 +551,24 @@ class GameState():
     
     def getCastleMoves(self, r, c, moves):
         """
-        Generate all valid castle move at r, c in curr_turn color
+        Generate all valid castle moves at r, c for the current turn.
         Parameters:
         r: Row
         c: Column
-        moves: move list
-        curr_turn: current color this turn
+        moves: List of moves
         """
         if self.inCheck():
-            return #can't castle while checked
+            return  # Can't castle while in check
 
-        #Kingside Castle Moves
-        if (self.whiteToMove and self.currentCastlingRight.wks) or ((not self.whiteToMove) and self.currentCastlingRight.bks):
-            if self.board[r][c + 1] == "--" and self.board[r][c + 2] == "--":
+        # Kingside Castle Moves
+        if (self.whiteToMove and self.currentCastlingRight.wks) or (not self.whiteToMove and self.currentCastlingRight.bks):
+            if c + 2 < 8 and self.board[r][c + 1] == "--" and self.board[r][c + 2] == "--":
                 if not self.squareUnderAttack(r, c + 1) and not self.squareUnderAttack(r, c + 2):
                     moves.append(Move((r, c), (r, c + 2), self.board, isCastleMove=True))
 
-        #Queenside Castle Moves           
-        if (self.whiteToMove and self.currentCastlingRight.wqs) or ((not self.whiteToMove) and self.currentCastlingRight.bqs):
-            if self.board[r][c - 1] == "--" and self.board[r][c - 2] == "--" and self.board[r][c - 3] == '--':
+        # Queenside Castle Moves
+        if (self.whiteToMove and self.currentCastlingRight.wqs) or (not self.whiteToMove and self.currentCastlingRight.bqs):
+            if c - 3 >= 0 and self.board[r][c - 1] == "--" and self.board[r][c - 2] == "--" and self.board[r][c - 3] == "--":
                 if not self.squareUnderAttack(r, c - 1) and not self.squareUnderAttack(r, c - 2):
                     moves.append(Move((r, c), (r, c - 2), self.board, isCastleMove=True))
 class Move():

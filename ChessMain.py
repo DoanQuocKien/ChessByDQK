@@ -38,7 +38,7 @@ def main():
         gs.whiteToMove = playAsWhite  # Set the starting player based on the menu choice
         validMoves = gs.getValidMoves()
         moveMade = False  # Flag variables for when a move is made
-        playerOne = True # True if a Human is playing white
+        playerOne = False # True if a Human is playing white
         playerTwo = False # True if a Human is playing black
 
         loadImages()
@@ -47,6 +47,7 @@ def main():
         playerClicks = []  # Keep track of players click: two tuples(row_from, col_from), (row_to, col_to)
 
         while running:
+            time.sleep(0.2)
             humanTurn = (gs.whiteToMove and playerOne) or (not gs.whiteToMove and playerTwo)
             for e in p.event.get():
                 if e.type == p.QUIT:
@@ -69,10 +70,11 @@ def main():
                                 if move == possible_move:
                                     move = copy.deepcopy(possible_move)
                                     promotionChoice = None
-                                    if possible_move.pawnPromotion:
+                                    if move.pawnPromotion:
                                         promotionChoice = promotionMenu(screen, 'w' if gs.whiteToMove else 'b')
                                     move.promotionChoice = promotionChoice  # Set the promotion choice in the Move object
                                     gs.makeMove(move)
+                                    print(sum(count for count in list(gs.positionCounts.values())))
                                     moveMade = True
                                     squareSelected = ()
                                     playerClicks = []
@@ -102,6 +104,7 @@ def main():
             if not humanTurn:
                 AImove = SmartMoveFinder.getMove(gs, validMoves, SmartMoveFinder.DEPTH)
                 gs.makeMove(AImove)
+                print(sum(count for count in list(gs.positionCounts.values())))
                 moveMade = True
 
             if moveMade:
