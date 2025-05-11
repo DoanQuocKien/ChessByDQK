@@ -35,8 +35,13 @@ class GameState():
         self.draw = False # draw or not
         self.enPassantPossible = () # store the square of the pawn that can be captured by en passant
         self.currentCastlingRight = CastleRight(True, True, True, True)
-        self.castleRightsLog = [copy.deepcopy(self.currentCastlingRight)]
-        self.enPassantPossiblelog = [()]
+        self.castleRightsLog = [CastleRight(
+                                self.currentCastlingRight.wks,
+                                self.currentCastlingRight.bks,
+                                self.currentCastlingRight.wqs,
+                                self.currentCastlingRight.bqs
+                                                            )]
+        self.enPassantPossibleLog = [()]
         self.simulation = False
         self.positionCounts = {}
         self.fiftyMoveCounter = 0
@@ -49,7 +54,7 @@ class GameState():
         """
         self.board[move.startRow][move.startCol] = "--"
         self.board[move.endRow][move.endCol] = move.pieceMoved
-        self.moveLog.append((move, copy.deepcopy(self.fiftyMoveCounter))) #log the move so we can undo it later
+        self.moveLog.append((move, self.fiftyMoveCounter)) #log the move so we can undo it later
         self.whiteToMove = not self.whiteToMove #switch players
         if move.pieceMoved == 'wK':
             self.whiteKingLocation = (move.endRow, move.endCol)
@@ -67,14 +72,19 @@ class GameState():
         #update enPassantPossible
         if move.pieceMoved[1] == 'p' and abs(move.startRow - move.endRow) == 2:
             self.enPassantPossible = ((move.startRow + move.endRow) // 2, move.startCol)
-            self.enPassantPossiblelog.append((self.enPassantPossible[0], self.enPassantPossible[1]))
+            self.enPassantPossibleLog.append((self.enPassantPossible[0], self.enPassantPossible[1]))
         else:
             self.enPassantPossible = ()
-            self.enPassantPossiblelog.append(())
+            self.enPassantPossibleLog.append(())
         
         #update castling rights - whenever it is a rook or a king move      
         self.updateCastleRights(move)
-        self.castleRightsLog.append(copy.deepcopy(self.currentCastlingRight))
+        self.castleRightsLog.append(CastleRight(
+                                    self.currentCastlingRight.wks,
+                                    self.currentCastlingRight.bks,
+                                    self.currentCastlingRight.wqs,
+                                    self.currentCastlingRight.bqs
+                                    ))  
                     
         #castle
         if move.isCastleMove:
@@ -101,8 +111,17 @@ class GameState():
     def getBoardString(self):
         """
         Generate a string representation of the board for threefold repetition.
+        Includes:
+        - Board layout
+        - Current player's turn
+        - En passant possibility
+        - Castling rights
         """
-        return ''.join([''.join(row) for row in self.board]) + ('w' if self.whiteToMove else 'b')
+        boardString = ''.join([''.join(row) for row in self.board])  # Board layout
+        boardString += 'w' if self.whiteToMove else 'b'  # Current player's turn
+        boardString += str(self.enPassantPossible)  # En passant possibility
+        boardString += f"{self.currentCastlingRight.wks}{self.currentCastlingRight.wqs}{self.currentCastlingRight.bks}{self.currentCastlingRight.bqs}"  # Castling rights
+        return boardString
     
     def updateCastleRights(self, move):
         """
@@ -148,6 +167,12 @@ class GameState():
         """
         if len(self.moveLog) != 0:
             move, self.fiftyMoveCounter = self.moveLog.pop()
+
+            # Decrement position count for threefold repetition
+            boardString = self.getBoardString()
+            if boardString in self.positionCounts:
+                self.positionCounts[boardString] -= 1
+            
             self.board[move.startRow][move.startCol] = move.pieceMoved
             self.board[move.endRow][move.endCol] = move.pieceCaptured
             if move.pieceMoved == 'wK':
@@ -160,12 +185,19 @@ class GameState():
             if move.isEnPassantMove:
                 self.board[move.endRow][move.endCol] = "--"
                 self.board[move.startRow][move.endCol] = move.pieceCaptured
-            self.enPassantPossiblelog.pop()
-            self.enPassantPossible = copy.deepcopy(self.enPassantPossiblelog[-1])
+            self.enPassantPossibleLog.pop()
+            if self.enPassantPossibleLog[-1] != ():
+                self.enPassantPossible = (self.enPassantPossibleLog[-1][0], self.enPassantPossibleLog[-1][1])
+            else: self.enPassantPossible = ()
             
             #undo castling right
             self.castleRightsLog.pop()
-            self.currentCastlingRight = copy.deepcopy(self.castleRightsLog[-1])
+            self.currentCastlingRight = CastleRight(
+                                                    self.castleRightsLog[-1].wks,
+                                                    self.castleRightsLog[-1].bks,
+                                                    self.castleRightsLog[-1].wqs,
+                                                    self.castleRightsLog[-1].bqs
+                                                    )
 
             #undo castle move
             if move.isCastleMove:
@@ -176,10 +208,10 @@ class GameState():
                     self.board[move.endRow][move.endCol - 2] = self.board[move.endRow][move.endCol + 1]
                     self.board[move.endRow][move.endCol + 1] = "--"
             
-            # Decrement position count for threefold repetition
-            boardString = self.getBoardString()
-            if boardString in self.positionCounts:
-                self.positionCounts[boardString] -= 1
+            #undo checkmate and draw state
+            self.checkMate = False
+            self.draw = False
+            
 
     def insufficientMaterial(self):
         """
@@ -235,10 +267,7 @@ class GameState():
         # check if the square is under attack by the opponent
         oppMoves = self.getAllPossibleMoves()
         self.whiteToMove = not self.whiteToMove #switch players back
-        for move in oppMoves:
-            if move.endRow == r and move.endCol == c:
-                return True
-        return False
+        return any(move.endRow == r and move.endCol == c for move in oppMoves)
 
     def getValidMoves(self):
         """
@@ -248,10 +277,12 @@ class GameState():
         tempCastleRight = CastleRight(self.currentCastlingRight.wks, self.currentCastlingRight.bks,
                                       self.currentCastlingRight.wqs, self.currentCastlingRight.bqs)
         moves = self.getAllPossibleMoves()
+
         if self.whiteToMove:
             self.getCastleMoves(self.whiteKingLocation[0], self.whiteKingLocation[1], moves)
         else:
             self.getCastleMoves(self.blackKingLocation[0], self.blackKingLocation[1], moves)
+        
         for i in range(len(moves) - 1, -1, -1):
             self.simulation = True
             self.makeMove(moves[i])
@@ -267,18 +298,21 @@ class GameState():
             else:
                 self.draw = True
             return []
+        elif self.fiftyMoveCounter >= 50:
+            self.draw = True
+            print("Draw by 50-move")
+            return []
+        elif any(count >= 3 for count in self.positionCounts.values()):
+            self.draw = True
+            print("Draw by repetition")
+            return []
+        elif self.insufficientMaterial():
+            self.draw = True
+            print("Draw by insufficient material")
+            return []
         else:
             self.checkMate = False
             self.draw = False
-        if self.fiftyMoveCounter >= 50:
-            self.draw = True
-            return []
-        if any(count >= 3 for count in self.positionCounts.values()):
-            self.draw = True
-            return []
-        if self.insufficientMaterial():
-            self.draw = True
-            return []
         self.enPassantPossible = tempEnpassantPossible
         self.currentCastlingRight = tempCastleRight
         return moves

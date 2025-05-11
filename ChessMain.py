@@ -38,7 +38,7 @@ def main():
         gs.whiteToMove = playAsWhite  # Set the starting player based on the menu choice
         validMoves = gs.getValidMoves()
         moveMade = False  # Flag variables for when a move is made
-        playerOne = False # True if a Human is playing white
+        playerOne = True # True if a Human is playing white
         playerTwo = False # True if a Human is playing black
 
         loadImages()
@@ -100,7 +100,7 @@ def main():
             
             # AI turn
             if not humanTurn:
-                AImove = SmartMoveFinder.findRandomMove(validMoves)
+                AImove = SmartMoveFinder.getMove(gs, validMoves, SmartMoveFinder.DEPTH)
                 gs.makeMove(AImove)
                 moveMade = True
 
