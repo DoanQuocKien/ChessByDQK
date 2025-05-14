@@ -2,276 +2,327 @@
 This file is responsible for operating an AI to play against the player
 """
 
+import numpy as np
 import random
+from multiprocessing import Queue, Pool
 
-pieceScore = {"K" : 0, "Q" : 9, "R" : 5, "B" : 3, "N" : 3, "p" : 1}
-CHECKMATE = 10000
+pieceScore = {
+    1: 1.5,  # White pawn
+    2: 4.5,  # White knight
+    3: 4.5,  # White bishop
+    4: 7.5,  # White rook
+    5: 13.5,  # White queen
+    6: 0,  # White king
+}
+
+kightScore = np.array([[1, 1, 1, 1, 1, 1, 1, 1],
+                      [1, 2, 2, 2, 2, 2, 2, 1],
+                      [1, 2, 3, 3, 3, 3, 2, 1],
+                      [1, 2, 3, 4, 4, 3, 2, 1],
+                      [1, 2, 3, 4, 4, 3, 2, 1],
+                      [1, 2, 3, 3, 3, 3, 2, 1],
+                      [1, 2, 2, 2, 2, 2, 2, 1],
+                      [1, 1, 1, 1, 1, 1, 1, 1]])
+
+bishopScore = np.array([[4, 3, 2, 1, 1, 2, 3, 4],
+                       [3, 4, 3, 2, 2, 3, 4, 3],
+                       [2, 3, 4, 3, 3, 4, 3, 2],
+                       [1, 2, 3, 4, 4, 3, 2, 1],
+                       [1, 2, 3, 4, 4, 3, 2, 1],
+                       [2, 3, 4, 3, 3, 4, 3, 2],
+                       [3, 4, 3, 2, 2, 3, 4, 3],
+                       [4, 3, 2, 1, 1, 2, 3, 4]])
+
+queenScore = np.array([[1, 1, 1, 3, 1, 1, 1, 1],
+                      [1, 2, 3, 3, 3, 1, 1, 1],
+                      [1, 4, 3, 3, 3, 4, 2, 1],
+                      [1, 2, 3, 3, 3, 2, 2, 1],
+                      [1, 2, 3, 3, 3, 2, 2, 1],
+                      [1, 4, 3, 3, 3, 4, 2, 1],
+                      [1, 2, 3, 3, 3, 1, 1, 1],
+                      [1, 1, 1, 3, 1, 1, 1, 1]])
+
+rookScore = np.array([[4, 3, 4, 4, 4, 4, 3, 4],
+                     [4, 4, 4, 4, 4, 4, 4, 4],
+                     [1, 1, 2, 3, 3, 2, 1, 1],
+                     [1, 2, 3, 4, 4, 3, 2, 1],
+                     [1, 2, 3, 4, 4, 3, 2, 1],
+                     [1, 1, 2, 3, 3, 2, 1, 1],
+                     [4, 4, 4, 4, 4, 4, 4, 4],
+                     [4, 3, 4, 4, 4, 4, 3, 4]])
+
+whitePawnScore = np.array([[8, 8, 8, 8, 8, 8, 8, 8],
+                          [8, 8, 8, 8, 8, 8, 8, 8],
+                          [5, 6, 6, 7, 7, 6, 6, 5],
+                          [2, 3, 3, 5, 5, 3, 3, 2],
+                          [1, 2, 3, 4, 4, 3, 2, 1],
+                          [1, 1, 2, 3, 3, 2, 1, 1],
+                          [1, 1, 1, 0, 0, 1, 1, 1],
+                          [0, 0, 0, 0, 0, 0, 0, 0]])
+
+blackPawnScore = np.array([[0, 0, 0, 0, 0, 0, 0, 0],
+                          [1, 1, 1, 0, 0, 1, 1, 1],
+                          [1, 1, 2, 3, 3, 2, 1, 1],
+                          [1, 2, 3, 4, 4, 3, 2, 1],
+                          [2, 3, 3, 5, 5, 3, 3, 2],
+                          [5, 6, 6, 7, 7, 6, 6, 5],
+                          [8, 8, 8, 8, 8, 8, 8, 8],
+                          [8, 8, 8, 8, 8, 8, 8, 8]])
+
+piecePositionScores = {2: kightScore, 
+                       3: bishopScore,
+                       5: queenScore,
+                       4: rookScore,
+                       11: whitePawnScore,
+                       21: blackPawnScore}
+
+CHECKMATE = 1000000
 DRAW = 0
-DEPTH = 2
+DEPTH = 4
 
 transpositionTable = {}
 
 def findRandomMove(validMoves):
     """
-    Find a random valid moves
-    Parameter:
-    validMoves: List of valid moves
+    Returns a random move from the list of valid moves.
+    If no valid moves are available, returns None.
     """
-    return random.choice(validMoves)
+    if not validMoves:  # Check if the list is empty
+        return None
+    return validMoves[random.randint(0, len(validMoves) - 1)]
 
-def quiescence(gs, alpha, beta, turnMultiplier):
-    """
-    Improved quiescence search to handle unstable positions.
-    """
-    stand_pat = turnMultiplier * scoreBoard(gs)
-    if stand_pat >= beta:
-        return beta
-    if alpha < stand_pat:
-        alpha = stand_pat
+def parallelEvaluateMove(args):
+    gs, move, depth, alpha, beta, turnMultiplier = args
+    gs.makeMove(move)
+    nextMoves = gs.getValidMoves()
+    score = -findMoveNegaMaxAlphaBeta(gs, nextMoves, depth - 1, -beta, -alpha, -turnMultiplier)
+    gs.undoMove()
+    return score, move
 
-    for move in gs.getValidMoves():
-        # Check if the move is a capture, promotion, or results in a check
-        gs.makeMove(move)
-        isCheck = gs.inCheck()
-        gs.undoMove()
-
-        if move.pieceCaptured != "--" or isCheck or move.pawnPromotion:
-            gs.makeMove(move)
-            score = -quiescence(gs, -beta, -alpha, -turnMultiplier)
-            gs.undoMove()
-            if score >= beta:
-                return beta
-            if score > alpha:
-                alpha = score
-    return alpha
-
-def findBestMovePVS(gs, validMoves, depth, alpha, beta, turnMultiplier):
+def findBestMove(gs, validMoves, returnQueue):
     """
-    Principal Variation Search (PVS) with alpha-beta pruning.
+    Helper method to make first recursive call
     """
+    with Pool() as pool:
+        results = pool.map(parallelEvaluateMove, [(gs, move, DEPTH, -CHECKMATE, CHECKMATE, 1 if gs.whiteToMove else -1) for move in validMoves])
+    global nextMove
+    nextMove = max(results, key=lambda x: x[0])[1]
+    returnQueue.put(nextMove)
+
+def findMoveNegaMaxAlphaBeta(gs, validMoves, depth, alpha, beta, turnMultiplier):
+    """
+    Find the best move using NegaMax algorithm with Alpha-Beta pruning
+    """
+    global nextMove
+    boardHash = hash(str(gs.board))
+    if boardHash in transpositionTable and transpositionTable[boardHash][0] >= depth:
+        return transpositionTable[boardHash][1]
+
     if depth == 0:
-        return turnMultiplier * scoreBoard(gs), None
-
-    bestMove = None
+        return turnMultiplier * scoreBoard(gs)
+    
     maxScore = -CHECKMATE
-    firstMove = True
-    for move in orderMoves(gs, validMoves):
+    validMoves = orderMoves(gs, validMoves)
+    validMoves = validMoves[:10]
+    for move in validMoves:
         gs.makeMove(move)
         nextMoves = gs.getValidMoves()
-        if firstMove:
-            score, _ = findBestMovePVS(gs, nextMoves, depth - 1, -beta, -alpha, -turnMultiplier)
-            firstMove = False
-        else:
-            score, _ = findBestMovePVS(gs, nextMoves, depth - 1, -alpha - 1, -alpha, -turnMultiplier)
-            if alpha < score < beta:
-                score, _ = findBestMovePVS(gs, nextMoves, depth - 1, -beta, -alpha, -turnMultiplier)
-        score = -score
-        gs.undoMove()
-
+        score = -findMoveNegaMaxAlphaBeta(gs, nextMoves, depth - 1, -beta, -alpha, -turnMultiplier)
         if score > maxScore:
             maxScore = score
-            bestMove = move
-
-        alpha = max(alpha, maxScore)
+            if depth == DEPTH:
+                nextMove = move
+        gs.undoMove()
+        if maxScore > alpha:  # pruning happens
+            alpha = maxScore
         if alpha >= beta:
             break
 
-    return maxScore, bestMove
-
-def getMove(gs, validMoves, depth):
-    """
-    Get AI's next move using Principal Variation Search (PVS).
-    """
-    _, bestMove = findBestMovePVS(gs, validMoves, depth, -CHECKMATE, CHECKMATE, 1 if gs.whiteToMove else -1)
-    return bestMove if bestMove else findRandomMove(validMoves)
-
-def orderMoves(gs, moves):
-    """Sort moves to improve pruning: prioritize captures, checks, promotions, and castling."""
-    def moveScore(move):
-        score = 0
-        if move.pieceCaptured != "--":
-            # MVV-LVA heuristic: prioritize capturing high-value pieces with low-value pieces
-            score += 10 * pieceScore[move.pieceCaptured[1]] - pieceScore[move.pieceMoved[1]]
-        
-        # Simulate the move to check if it results in a check
-        #gs.makeMove(move)
-        #isCheck = gs.inCheck()
-        #gs.undoMove()
-        #if isCheck:
-        #    score += 50  # Prioritize moves that put the opponent in check
-        
-        if move.pawnPromotion:
-            score += 100  # Prioritize pawn promotions
-        
-        # Prioritize castling moves
-        if move.isCastleMove:
-            score += 75  # Encourage castling for king safety and rook activation
-        
-        return score
-
-    return sorted(moves, key=moveScore, reverse=True)
+    transpositionTable[boardHash] = (depth, maxScore)
+    return maxScore
 
 def scoreBoard(gs):
     """
-    Score the board based on material, mobility, king safety, pawn structure, 
-    pieces threatened, pieces protected, and castling capability.
-    Return: score, the greater the better for white, the lower the better for black.
+    Score the board. A positive score is good for white, a negative score is good for black.
     """
     if gs.checkMate:
         if gs.whiteToMove:
             return -CHECKMATE  # Black wins
         else:
             return CHECKMATE  # White wins
-    if gs.draw:
+    elif gs.draw:
         return DRAW
 
     score = 0
 
-    # Material score
-    for row in gs.board:
-        for square in row:
-            if square[0] == 'w':
-                score += pieceScore[square[1]]
-            elif square[0] == 'b':
-                score -= pieceScore[square[1]]
+    # Material and positional scoring
+    for row in range(len(gs.board)):
+        for col in range(len(gs.board[row])):
+            square = gs.board[row][col]
+            if square != 0:
+                # Score it positionally
+                piecePositionScore = 0
+                if square % 10 != 6:  # No position table for king, yet
+                    if square % 10 == 1:  # For pawns
+                        piecePositionScore = piecePositionScores[int(square)][row][col]
+                    else:  # For other pieces
+                        piecePositionScore = piecePositionScores[int(square % 10)][row][col]
 
-    # Mobility (number of valid moves)
-    whiteMoves = len(gs.getAllPossibleMoves()) if gs.whiteToMove else 0
-    gs.whiteToMove = not gs.whiteToMove
-    blackMoves = len(gs.getAllPossibleMoves()) if not gs.whiteToMove else 0
-    gs.whiteToMove = not gs.whiteToMove
-    score += 0.1 * whiteMoves - 0.1 * blackMoves
+                if square // 10 == 1:  # White piece
+                    score += pieceScore[int(square % 10)] + piecePositionScore * 0.05
+                elif square // 10 == 2:  # Black piece
+                    score -= pieceScore[int(square % 10)] + piecePositionScore * 0.05
 
-    # King safety
-    score += evaluateKingSafety(gs)
 
-    # Pawn structure
+    # Additional scoring conditions
+
+    # 1. King safety
+    if gs.whiteToMove:
+        score += evaluateKingSafety(gs, True)
+        score -= evaluateKingSafety(gs, False)
+    else:
+        score += evaluateKingSafety(gs, False)
+        score -= evaluateKingSafety(gs, True)
+
+    # 2. Control of the center
+    centerSquares = [(3, 3), (3, 4), (4, 3), (4, 4)]
+    for r, c in centerSquares:
+        piece = gs.board[r][c]
+        if piece != 0:
+            if piece // 10 == 1:  # White controls center
+                score += 1
+            elif piece // 10 == 2:  # Black controls center
+                score -= 1
+
+    # 3. Pawn structure
     score += evaluatePawnStructure(gs)
 
-    # Control of the center
-    score += evaluateCenterControl(gs)
-
-    # Pieces threatened and protected
-    score += evaluateThreatsAndProtections(gs)
-
-    # Castling capability
-    score += evaluateCastling(gs)
+    # 4. Mobility (number of valid moves)
+    whiteMoves = len(gs.getValidMoves()) if gs.whiteToMove else 0
+    blackMoves = len(gs.getValidMoves()) if not gs.whiteToMove else 0
+    score += 0.05 * whiteMoves
+    score -= 0.05 * blackMoves
 
     return score
 
-def evaluateKingSafety(gs):
+def evaluateKingSafety(gs, isWhite):
     """
-    Evaluate king safety based on pawn protection and exposure to attacks.
+    Evaluate the safety of the king.
+    A king in the center or exposed to attacks is penalized.
     """
-    score = 0
-    kingPositions = {"wK": gs.whiteKingLocation, "bK": gs.blackKingLocation}
-    for color, kingPos in kingPositions.items():
-        r, c = kingPos
-        pawnDirection = -1 if color == "wK" else 1
-        pawnProtection = [
-            (r + pawnDirection, c - 1),
-            (r + pawnDirection, c + 1),
-        ]
-        for pr, pc in pawnProtection:
-            if gs.insideBoard(pr, pc) and gs.board[pr][pc] == color[0] + "p":
-                score += 0.5 if color == "wK" else -0.5
+    kingPosition = gs.whiteKingLocation if isWhite else gs.blackKingLocation
+    kingRow, kingCol = kingPosition
+    safetyScore = 0
 
-        # Penalize exposed kings (e.g., no pawns nearby)
-        if r < 2 or r > 5:  # Kings near the edges are more exposed
-            score -= 1 if color == "wK" else -1
+    # Penalize if the king is in the center
+    if 2 <= kingRow <= 5 and 2 <= kingCol <= 5:
+        safetyScore -= 2  # King is in the center
 
-    return score
+    # Penalize if the king is exposed (no pawns nearby)
+    pawnRow = kingRow - 1 if isWhite else kingRow + 1
+    if 0 <= pawnRow < 8:
+        if kingCol - 1 >= 0 and gs.board[pawnRow][kingCol - 1] % 10 == 1:
+            safetyScore += 2  # Pawn on the left
+        if kingCol + 1 < 8 and gs.board[pawnRow][kingCol + 1] % 10 == 1:
+            safetyScore += 2  # Pawn on the right
+
+    return safetyScore
 
 def evaluatePawnStructure(gs):
     """
-    Evaluate pawn structure, penalizing doubled, isolated, and backward pawns.
+    Evaluate the pawn structure.
+    Reward connected pawns and penalize isolated or doubled pawns.
     """
     score = 0
-    whitePawns = [c for r in range(8) for c in range(8) if gs.board[r][c] == "wp"]
-    blackPawns = [c for r in range(8) for c in range(8) if gs.board[r][c] == "bp"]
+    whitePawns = [col for row in gs.board for col in row if col == 11]
+    blackPawns = [col for row in gs.board for col in row if col == 21]
 
     # Penalize doubled pawns
     for col in range(8):
-        whiteCount = sum(1 for r in range(8) if gs.board[r][col] == "wp")
-        blackCount = sum(1 for r in range(8) if gs.board[r][col] == "bp")
-        if whiteCount > 1:
-            score -= 0.5 * (whiteCount - 1)
-        if blackCount > 1:
-            score += 0.5 * (blackCount - 1)
+        whitePawnsInCol = sum(1 for row in range(8) if gs.board[row][col] == 11)
+        blackPawnsInCol = sum(1 for row in range(8) if gs.board[row][col] == 21)
+        if whitePawnsInCol > 1:
+            score -= 0.2 * (whitePawnsInCol - 1)  # Penalize doubled white pawns
+        if blackPawnsInCol > 1:
+            score += 0.2 * (blackPawnsInCol - 1)  # Penalize doubled black pawns
 
-    # Penalize isolated pawns
-    for col in range(8):
-        if col > 0 and col < 7:
-            whiteIsolated = all(gs.board[r][col - 1] != "wp" and gs.board[r][col + 1] != "wp" for r in range(8))
-            blackIsolated = all(gs.board[r][col - 1] != "bp" and gs.board[r][col + 1] != "bp" for r in range(8))
-        elif col == 0:
-            whiteIsolated = all(gs.board[r][col + 1] != "wp" for r in range(8))
-            blackIsolated = all(gs.board[r][col + 1] != "bp" for r in range(8))
-        elif col == 7:
-            whiteIsolated = all(gs.board[r][col - 1] != "wp" for r in range(8))
-            blackIsolated = all(gs.board[r][col - 1] != "bp" for r in range(8))
-        if whiteIsolated:
-            score -= 0.5
-        if blackIsolated:
-            score += 0.5
+    # Reward connected pawns
+    for row in range(8):
+        for col in range(8):
+            if gs.board[row][col] == 11:  # White pawn
+                if col - 1 >= 0 and gs.board[row][col - 1] == 11:
+                    score += 0.1  # Connected white pawn
+                if col + 1 < 8 and gs.board[row][col + 1] == 11:
+                    score += 0.1  # Connected white pawn
+            elif gs.board[row][col] == 21:  # Black pawn
+                if col - 1 >= 0 and gs.board[row][col - 1] == 21:
+                    score -= 0.1  # Connected black pawn
+                if col + 1 < 8 and gs.board[row][col + 1] == 21:
+                    score -= 0.1  # Connected black pawn
 
     return score
 
-def evaluateCenterControl(gs):
+def findBestMoveMinMax(gs, validMoves, returnQueue):
     """
-    Evaluate control of the center squares (e4, d4, e5, d5).
+    Helper method to make first recursive call
     """
-    centerSquares = [(3, 3), (3, 4), (4, 3), (4, 4)]
-    score = 0
-    for r, c in centerSquares:
-        if gs.board[r][c][0] == "w":
-            score += 5
-        elif gs.board[r][c][0] == "b":
-            score -= 5
-    return score
+    global nextMove
+    nextMove = None
+    random.shuffle(validMoves)
+    findMoveMinMax(gs, validMoves, DEPTH, gs.whiteToMove)
+    returnQueue.put(nextMove)
 
-def evaluateThreatsAndProtections(gs):
+def findMoveMinMax(gs, validMoves, depth, whiteToMove):
     """
-    Evaluate pieces that are threatened or protected.
+    Find the best move using MinMax algorithm
     """
-    score = 0
-    tempWhiteToMove = gs.whiteToMove
-    for r in range(8):
-        for c in range(8):
-            piece = gs.board[r][c]
-            if piece == "--":
-                continue
-            color = piece[0]
-            pieceValue = pieceScore[piece[1]]
+    global nextMove
+    if depth == 0:
+        return scoreBoard(gs)
+    
+    if whiteToMove:
+        maxScore = -CHECKMATE
+        for move in validMoves:
+            gs.makeMove(move)
+            nextMoves = gs.getValidMoves()
+            score = findMoveMinMax(gs, nextMoves, depth - 1, False)
+            if score > maxScore:
+                maxScore = score
+                if depth == DEPTH:
+                    nextMove = move
+            gs.undoMove()
+        return maxScore
+    
+    else:
+        minScore = CHECKMATE
+        for move in validMoves:
+            gs.makeMove(move)
+            nextMoves = gs.getValidMoves()
+            score = findMoveMinMax(gs, nextMoves, depth - 1, True)
+            if score < minScore:
+                minScore = score
+                if depth == DEPTH:
+                    nextMove = move
+            gs.undoMove()
+        return minScore
 
-            # Check if the piece is threatened
-            if gs.squareUnderAttack(r, c):
-                score -= 0.5 * pieceValue if color == "w" else -0.5 * pieceValue
-
-            # Check if the piece is protected
-            gs.whiteToMove = (color == "w")
-            if any(gs.squareUnderAttack(r + dr, c + dc) for dr, dc in [(1, 0), (-1, 0), (0, 1), (0, -1)]):
-                score += 0.3 * pieceValue if color == "w" else -0.3 * pieceValue
-    gs.whiteToMove = tempWhiteToMove
-
-    return score
-
-def evaluateCastling(gs):
+def getMove(gs, validMoves):
     """
-    Evaluate castling capability and reward completed castling moves.
+    Get the best move for the current game state.
+    Returns None if no valid moves are available.
     """
-    score = 0
+    if not validMoves:  # Check if there are no valid moves
+        return None
+        
+    returnQueue = Queue()
+    findBestMove(gs, validMoves, returnQueue)
+    return returnQueue.get()
 
-    # Reward the ability to castle if it hasn't been done yet
-    if gs.currentCastlingRight.wks or gs.currentCastlingRight.wqs:
-        score += 4  # White can still castle
-    if gs.currentCastlingRight.bks or gs.currentCastlingRight.bqs:
-        score -= 4  # Black can still castle
-
-    # Reward completed castling moves
-    if gs.whiteKingLocation == (7, 6) or gs.whiteKingLocation == (7, 2):  # White has castled
-        score += 5  # Reward for castling
-    if gs.blackKingLocation == (0, 6) or gs.blackKingLocation == (0, 2):  # Black has castled
-        score -= 5  # Reward for castling
-
-    return score
+def orderMoves(gs, validMoves):
+    def moveHeuristic(move):
+        startScore = scoreBoard(gs)
+        gs.makeMove(move)
+        endScore = scoreBoard(gs)
+        gs.undoMove()
+        return (endScore - startScore) * (1 if gs.whiteToMove else -1)
+    return sorted(validMoves, key=moveHeuristic, reverse=True)

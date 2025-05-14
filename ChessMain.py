@@ -2,9 +2,9 @@
 Main file to recieve user inputs and displaying chess matches (CurrentGameState object)
 """
 import pygame as p
-import ChessEngine
+import ChessEngine as CsE
 import copy
-import SmartMoveFinder
+import SmartMoveFinder as SmartMoveFinder
 import time
 
 WIDTH = HEIGHT = 514
@@ -15,11 +15,14 @@ IMAGES = {}
 
 def loadImages():
     """
-    Initialize a global dictionary of chess pieces. Call once
+    Initialize a global dictionary of chess pieces. Call once.
     """
-    pieces = ['wp', 'wR', 'wN', 'wB', 'wQ', 'wK', 'bp', 'bR', 'bN', 'bB', 'bQ', 'bK']
-    for piece in pieces:
-        IMAGES[piece] = p.transform.scale(p.image.load(f"images/{piece}.png"), (SQ_SIZE, SQ_SIZE))
+    pieces = {
+        11: "wp", 12: "wN", 13: "wB", 14: "wR", 15: "wQ", 16: "wK",
+        21: "bp", 22: "bN", 23: "bB", 24: "bR", 25: "bQ", 26: "bK"
+    }
+    for piece, filename in pieces.items():
+        IMAGES[piece] = p.transform.scale(p.image.load(f"images/{filename}.png"), (SQ_SIZE, SQ_SIZE))
 
 def main():
     """
@@ -34,11 +37,11 @@ def main():
         playAsWhite = startingMenu(screen)
 
         screen.fill(p.Color("white"))
-        gs = ChessEngine.GameState()
+        gs = CsE.GameState()
         gs.whiteToMove = playAsWhite  # Set the starting player based on the menu choice
         validMoves = gs.getValidMoves()
         moveMade = False  # Flag variables for when a move is made
-        playerOne = False # True if a Human is playing white
+        playerOne = True # True if a Human is playing white
         playerTwo = False # True if a Human is playing black
 
         loadImages()
@@ -47,7 +50,6 @@ def main():
         playerClicks = []  # Keep track of players click: two tuples(row_from, col_from), (row_to, col_to)
 
         while running:
-            time.sleep(0.2)
             humanTurn = (gs.whiteToMove and playerOne) or (not gs.whiteToMove and playerTwo)
             for e in p.event.get():
                 if e.type == p.QUIT:
@@ -65,16 +67,15 @@ def main():
                             squareSelected = (row, col)
                             playerClicks.append(squareSelected)
                         if len(playerClicks) == 2:
-                            move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
+                            move = CsE.Move(playerClicks[0], playerClicks[1], gs.board)
                             for possible_move in validMoves:
                                 if move == possible_move:
                                     move = copy.deepcopy(possible_move)
                                     promotionChoice = None
-                                    if move.pawnPromotion:
+                                    if possible_move.pawnPromotion:
                                         promotionChoice = promotionMenu(screen, 'w' if gs.whiteToMove else 'b')
                                     move.promotionChoice = promotionChoice  # Set the promotion choice in the Move object
                                     gs.makeMove(move)
-                                    print(sum(count for count in list(gs.positionCounts.values())))
                                     moveMade = True
                                     squareSelected = ()
                                     playerClicks = []
@@ -102,9 +103,8 @@ def main():
             
             # AI turn
             if not humanTurn:
-                AImove = SmartMoveFinder.getMove(gs, validMoves, SmartMoveFinder.DEPTH)
+                AImove = SmartMoveFinder.getMove(gs, validMoves)
                 gs.makeMove(AImove)
-                print(sum(count for count in list(gs.positionCounts.values())))
                 moveMade = True
 
             if moveMade:
@@ -119,7 +119,7 @@ def highlightSquare(screen, gs, validMoves, sqSelected):
         r, c = sqSelected
         if (r < 0) or (r > 7) or (c < 0) or (c > 7):
             return
-        if gs.board[r][c][0] == ('w' if gs.whiteToMove else 'b'): #sqSelected is a piece that can be moved
+        if gs.board[r][c] // 10 == (1 if gs.whiteToMove else 2): #sqSelected is a piece that can be moved
             #highlight selected square
             s = p.Surface((SQ_SIZE, SQ_SIZE))
             s.set_alpha(100)
@@ -164,7 +164,7 @@ def drawPieces(screen, board):
     for r in range(DIMENSION):
         for c in range(DIMENSION):
             piece = board[r][c]
-            if piece != "--": #not empty square
+            if piece != 0: #not empty square
                 screen.blit(IMAGES[piece], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
 def promotionMenu(screen, color):
@@ -193,6 +193,9 @@ def promotionMenu(screen, color):
 
     p.display.flip()
 
+    pieceChoose = {"wp": 11, "wK": 12, "wB": 13, "wR": 14, "wQ": 15, "wK": 16,
+                   "bp": 21, "bK": 22, "bB": 23, "bR": 24, "bQ": 25, "bK": 26}
+
     # Wait for player to click an option
     while True:
         for e in p.event.get():
@@ -200,7 +203,7 @@ def promotionMenu(screen, color):
                 mouseX, mouseY = e.pos
                 for rect, option in optionRects:
                     if rect.collidepoint(mouseX, mouseY):
-                        return option
+                        return pieceChoose[option]
 def startingMenu(screen):
     """
     Display the starting menu with options to play as White or Black.
