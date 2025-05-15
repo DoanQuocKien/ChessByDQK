@@ -78,7 +78,7 @@ piecePositionScores = {2: kightScore,
 
 CHECKMATE = 1000000
 DRAW = 0
-DEPTH = 4
+DEPTH = 2
 
 transpositionTable = {}
 

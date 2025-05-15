@@ -7,20 +7,30 @@ import copy
 import SmartMoveFinder as SmartMoveFinder
 import time
 
-WIDTH = HEIGHT = 514
+WIDTH = 700  # Increase width to include sidebar
+HEIGHT = 514
 DIMENSION = 8 #dimensions of a chess board are 8x8
 SQ_SIZE = HEIGHT // DIMENSION
 MAX_FPS = 15 #for animation
 IMAGES = {}
 
+RESIGN_BUTTON = p.Rect(514, 470, 180, 35)
+OFFER_DRAW_BUTTON = p.Rect(514, 420, 180, 35)
+
+moveLog = []
+
+pieces = {
+    11: "wp", 12: "wN", 13: "wB", 14: "wR", 15: "wQ", 16: "wK",
+    21: "bp", 22: "bN", 23: "bB", 24: "bR", 25: "bQ", 26: "bK"
+}
+pieceChoose = {
+    "wp": 11, "wK": 12, "wB": 13, "wR": 14, "wQ": 15, "wK": 16,
+    "bp": 21, "bK": 22, "bB": 23, "bR": 24, "bQ": 25, "bK": 26
+}
 def loadImages():
     """
     Initialize a global dictionary of chess pieces. Call once.
     """
-    pieces = {
-        11: "wp", 12: "wN", 13: "wB", 14: "wR", 15: "wQ", 16: "wK",
-        21: "bp", 22: "bN", 23: "bB", 24: "bR", 25: "bQ", 26: "bK"
-    }
     for piece, filename in pieces.items():
         IMAGES[piece] = p.transform.scale(p.image.load(f"images/{filename}.png"), (SQ_SIZE, SQ_SIZE))
 
@@ -41,8 +51,16 @@ def main():
         gs.whiteToMove = playAsWhite  # Set the starting player based on the menu choice
         validMoves = gs.getValidMoves()
         moveMade = False  # Flag variables for when a move is made
+        forwardMove = False # Flag variables to determine whether the move is made or undid
         playerOne = True # True if a Human is playing white
-        playerTwo = False # True if a Human is playing black
+        playerTwo = True # True if a Human is playing black
+        drawOfferPending = False
+        drawOfferedBy = None
+        drawAcceptBox = False
+        resignAccept = False
+        moveLogPage = 0
+        moveLog = []
+        moveLogPage = 0
 
         loadImages()
         running = True
@@ -51,63 +69,144 @@ def main():
 
         while running:
             humanTurn = (gs.whiteToMove and playerOne) or (not gs.whiteToMove and playerTwo)
+            move = None
             for e in p.event.get():
                 if e.type == p.QUIT:
                     p.quit()
                     exit()
                 elif e.type == p.MOUSEBUTTONDOWN:
+                    mouseX, mouseY = e.pos
+                    # Offer Draw button
+                    if OFFER_DRAW_BUTTON.collidepoint(mouseX, mouseY):
+                        if not drawOfferPending:
+                            drawOfferPending = True
+                            drawOfferedBy = "white" if gs.whiteToMove else "black"
+                            # If AI is the receiver, check auto-accept
+                            if (not humanTurn):
+                                # Only accept if move number >= 40 and AI is worse or equal
+                                if len(moveLog) >= 80:  # 40 moves per side
+                                    ai_score = SmartMoveFinder.scoreBoard(gs)
+                                    if (gs.whiteToMove and ai_score <= 0) or (not gs.whiteToMove and ai_score >= 0):
+                                        moveLog.append("1/2 - 1/2 (Draw agreed)")
+                                        endingScreen(screen, "Draw", gs)
+                                        break
+                        continue
+                    # Give Up button
+                    if RESIGN_BUTTON.collidepoint(mouseX, mouseY):
+                        resignAccept = True
+                        break
+                    # Move log paging arrows
+                    upArrowRect, downArrowRect, totalPages = drawMoveLog(screen, moveLog, moveLogPage)
+                    if upArrowRect and upArrowRect.collidepoint(mouseX, mouseY):
+                        moveLogPage = 0  # Go to first page
+                        continue
+                    if downArrowRect and downArrowRect.collidepoint(mouseX, mouseY):
+                        moveLogPage = (moveLogPage + 1) % totalPages  # Next page, wrap around
+                        continue
                     if humanTurn:
                         location = p.mouse.get_pos()  # x, y location of mouse
                         col = location[0] // SQ_SIZE
                         row = location[1] // SQ_SIZE
-                        if squareSelected == (row, col):  # User clicked the same square twice
-                            squareSelected = ()
-                            playerClicks = []
-                        else:
-                            squareSelected = (row, col)
-                            playerClicks.append(squareSelected)
-                        if len(playerClicks) == 2:
-                            move = CsE.Move(playerClicks[0], playerClicks[1], gs.board)
-                            for possible_move in validMoves:
-                                if move == possible_move:
-                                    move = copy.deepcopy(possible_move)
-                                    promotionChoice = None
-                                    if possible_move.pawnPromotion:
-                                        promotionChoice = promotionMenu(screen, 'w' if gs.whiteToMove else 'b')
-                                    move.promotionChoice = promotionChoice  # Set the promotion choice in the Move object
-                                    gs.makeMove(move)
-                                    moveMade = True
-                                    squareSelected = ()
-                                    playerClicks = []
-                            if not moveMade:  # If the move is invalid, reset player clicks
-                                playerClicks = [squareSelected]
+                        if 0 <= col < 8 and 0 <= row < 8:
+                            if squareSelected == (row, col):  # User clicked the same square twice
+                                squareSelected = ()
+                                playerClicks = []
+                            else:
+                                squareSelected = (row, col)
+                                playerClicks.append(squareSelected)
+                            if len(playerClicks) == 2:
+                                move = CsE.Move(playerClicks[0], playerClicks[1], gs.board)
+                                for possible_move in validMoves:
+                                    if move == possible_move:
+                                        move = copy.deepcopy(possible_move)
+                                        promotionChoice = None
+                                        if possible_move.pawnPromotion:
+                                            promotionChoice = promotionMenu(screen, 1 if gs.whiteToMove else 2)
+                                        move.promotionChoice = promotionChoice  # Set the promotion choice in the Move object
+                                        gs.makeMove(move)
+                                        moveMade = True
+                                        forwardMove = True
+                                        squareSelected = ()
+                                        playerClicks = []
+                                if not moveMade:  # If the move is invalid, reset player clicks
+                                    playerClicks = [squareSelected]
                 elif e.type == p.KEYDOWN:
                     if e.key == p.K_z:  # Undo move
                         gs.undoMove()
-                        moveMade = True
+                        forwardMove = False
+                        moveMade = True\
+            
+            if resignAccept:
+                winner = "Black" if gs.whiteToMove else "White"
+                moveLog.append("0 - 1 (Give up)" if gs.whiteToMove else "1 - 0 (Give up)")
+                endingScreen(screen, f"{winner} Wins (Opponent gave up)", gs)
+                break
+
+            # --- Draw offer accept box appears immediately if pending and it's the other player's turn ---
+            if drawOfferPending and humanTurn and drawOfferedBy != ("white" if gs.whiteToMove else "black"):
+                yes_rect, no_rect = drawAcceptDrawBox(screen)
+                p.display.flip()
+                waiting = True
+                while waiting:
+                    for e in p.event.get():
+                        if e.type == p.QUIT:
+                            p.quit()
+                            exit()
+                        elif e.type == p.MOUSEBUTTONDOWN:
+                            mouseX, mouseY = e.pos
+                            if yes_rect.collidepoint(mouseX, mouseY):
+                                moveLog.append("1/2 - 1/2 (Draw agreed)")
+                                endingScreen(screen, "Draw", gs)
+                                waiting = False
+                                running = False
+                                break
+                            elif no_rect.collidepoint(mouseX, mouseY):
+                                drawOfferPending = False
+                                waiting = False
+                                break
 
             if moveMade:
                 validMoves = gs.getValidMoves()
                 moveMade = False
+                checkAdd = "" 
+                if (gs.whiteToMove and gs.squareUnderAttack(gs.whiteKingLocation[0], gs.whiteKingLocation[1])) or (not gs.whiteToMove and gs.squareUnderAttack(gs.blackKingLocation[0], gs.blackKingLocation[1])):
+                    if gs.checkMate:
+                        checkAdd = "#"
+                    else:
+                        checkAdd = "+"
+                if forwardMove:
+                    moveLog.append(move.getChessNotation() + checkAdd)  # Add move notation to the log
+                elif len(moveLog) != 0:
+                    moveLog.pop()
+                moveMade = False 
 
-            drawGameState(screen, gs, validMoves, squareSelected)
+            drawGameState(screen, gs, validMoves, squareSelected, moveLog, moveLogPage)
             clock.tick(MAX_FPS)
             p.display.flip()
 
             # Check for game over
             if gs.checkMate or gs.draw:
-                result = "White Wins" if gs.checkMate and not gs.whiteToMove else \
-                        "Black Wins" if gs.checkMate and gs.whiteToMove else "Draw"
+                if gs.checkMate:
+                    if not gs.whiteToMove:
+                        result = "White Wins"
+                        moveLog.append("1 - 0")
+                    else:
+                        result = "Black Wins"
+                        moveLog.append("0 - 1")
+                else:
+                    result = "Draw"
+                    moveLog.append("1/2 - 1/2")
                 endingScreen(screen, result, gs)  # Pass the game state to the ending screen
                 break  # Break out of the game loop to return to the main menu
             
             # AI turn
             if not humanTurn:
-                AImove = SmartMoveFinder.getMove(gs, validMoves)
-                gs.makeMove(AImove)
+                move = SmartMoveFinder.getMove(gs, validMoves)
+                gs.makeMove(move)
                 moveMade = True
 
             if moveMade:
+                moveLog.append(move.getChessNotation())  # Add move notation to the log
                 validMoves = gs.getValidMoves()
                 moveMade = False
 
@@ -131,16 +230,11 @@ def highlightSquare(screen, gs, validMoves, sqSelected):
                 if move.startRow == r and move.startCol == c:
                     screen.blit(s, (move.endCol * SQ_SIZE, move.endRow * SQ_SIZE))
 
-def drawGameState(screen, gs, validMoves, sqSelected):
-    """
-    Display gamestates
-    parameters:
-    - screen: the size of the screen
-    - gs: the coded gamestates
-    """
+def drawGameState(screen, gs, validMoves, sqSelected, moveLog, moveLogPage):
     drawBoard(screen)
     highlightSquare(screen, gs, validMoves, sqSelected)
     drawPieces(screen, gs.board)
+    drawMoveLog(screen, moveLog, moveLogPage)
 
 def drawBoard(screen):
     """
@@ -167,6 +261,69 @@ def drawPieces(screen, board):
             if piece != 0: #not empty square
                 screen.blit(IMAGES[piece], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
+def drawMoveLog(screen, moveLog, moveLogPage):
+    """
+    Draw the move log in the sidebar with paging arrows if too long.
+    """
+    font = p.font.SysFont("Arial", 18, False, False)
+    moveLogRect = p.Rect(514, 0, 186, HEIGHT)  # Sidebar dimensions
+    p.draw.rect(screen, p.Color("white"), moveLogRect)
+    p.draw.rect(screen, p.Color("black"), moveLogRect, 2)  # Border
+
+    moveTexts = []
+    for i in range(0, len(moveLog), 2):
+        moveText = f"{i // 2 + 1}. {moveLog[i]}"
+        if i + 1 < len(moveLog):  # Check if black's move exists
+            moveText += f" {moveLog[i + 1]}"
+        moveTexts.append(moveText)
+
+    moveLogLinePerPage = 5
+    totalPages = max(1, (len(moveTexts) + moveLogLinePerPage - 1) // moveLogLinePerPage)
+    moveLogPage = moveLogPage % totalPages  # wrap around
+
+    startLine = moveLogPage * moveLogLinePerPage
+    endLine = min(startLine + moveLogLinePerPage, len(moveTexts))
+
+    padding = 5
+    textY = padding
+    for text in moveTexts[startLine:endLine]:
+        textObject = font.render(text, True, p.Color("black"))
+        screen.blit(textObject, (moveLogRect.x + padding, textY))
+        textY += textObject.get_height() + 5
+
+    # Draw arrows if needed
+    arrowFont = p.font.SysFont("Arial", 28, True, False)
+    if totalPages > 1:
+        # Down arrow (next page)
+        downArrowRect = p.Rect(moveLogRect.x + moveLogRect.width - 40, moveLogRect.y + HEIGHT - 130, 30, 30)
+        p.draw.polygon(screen, p.Color("black"), [
+            (downArrowRect.x + 15, downArrowRect.y + 20),
+            (downArrowRect.x + 5, downArrowRect.y + 10),
+            (downArrowRect.x + 25, downArrowRect.y + 10)
+        ])
+        # Up arrow (back to first page)
+        upArrowRect = p.Rect(moveLogRect.x + 10, moveLogRect.y + HEIGHT - 130, 30, 30)
+        p.draw.polygon(screen, p.Color("black"), [
+            (upArrowRect.x + 15, upArrowRect.y + 10),
+            (upArrowRect.x + 5, upArrowRect.y + 20),
+            (upArrowRect.x + 25, upArrowRect.y + 20)
+        ])
+    else:
+        downArrowRect = upArrowRect = None
+
+    # Draw Offer Draw button
+    p.draw.rect(screen, p.Color("lightgray"), OFFER_DRAW_BUTTON)
+    offerText = font.render("Offer Draw", True, p.Color("black"))
+    screen.blit(offerText, (OFFER_DRAW_BUTTON.x + 20, OFFER_DRAW_BUTTON.y + 5))
+
+    # Draw Give Up button
+    p.draw.rect(screen, p.Color("lightgray"), RESIGN_BUTTON)
+    giveUpText = font.render("Resign", True, p.Color("black"))
+    screen.blit(giveUpText, (RESIGN_BUTTON.x + 35, RESIGN_BUTTON.y + 5))
+
+    # Return arrow rects for click detection
+    return upArrowRect, downArrowRect, totalPages
+
 def promotionMenu(screen, color):
     """
     Display a promotion menu for the player to choose a piece.
@@ -176,8 +333,8 @@ def promotionMenu(screen, color):
     Returns:
     - The chosen piece ('Q', 'R', 'B', 'N')
     """
-    options = ['Q', 'R', 'B', 'N']
-    pieceImages = [IMAGES[color + option] for option in options]  # Get images for the promotion options
+    options = [5, 4, 3, 2]
+    pieceImages = [IMAGES[color * 10 + option] for option in options]  # Get images for the promotion options
     menuWidth = 4 * SQ_SIZE
     menuHeight = SQ_SIZE
     menuX = (WIDTH - menuWidth) // 2
@@ -193,9 +350,6 @@ def promotionMenu(screen, color):
 
     p.display.flip()
 
-    pieceChoose = {"wp": 11, "wK": 12, "wB": 13, "wR": 14, "wQ": 15, "wK": 16,
-                   "bp": 21, "bK": 22, "bB": 23, "bR": 24, "bQ": 25, "bK": 26}
-
     # Wait for player to click an option
     while True:
         for e in p.event.get():
@@ -203,7 +357,23 @@ def promotionMenu(screen, color):
                 mouseX, mouseY = e.pos
                 for rect, option in optionRects:
                     if rect.collidepoint(mouseX, mouseY):
-                        return pieceChoose[option]
+                        return option
+
+def drawAcceptDrawBox(screen):
+    font = p.font.SysFont("Arial", 24)
+    box = p.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 50, 200, 100)
+    p.draw.rect(screen, p.Color("lightgray"), box)
+    p.draw.rect(screen, p.Color("black"), box, 2)
+    text = font.render("Accept draw offer?", True, p.Color("black"))
+    screen.blit(text, (box.x + 20, box.y + 20))
+    yes_rect = p.Rect(box.x + 20, box.y + 60, 60, 30)
+    no_rect = p.Rect(box.x + 120, box.y + 60, 60, 30)
+    p.draw.rect(screen, p.Color("green"), yes_rect)
+    p.draw.rect(screen, p.Color("red"), no_rect)
+    screen.blit(font.render("Yes", True, p.Color("white")), (yes_rect.x + 10, yes_rect.y + 5))
+    screen.blit(font.render("No", True, p.Color("white")), (no_rect.x + 15, no_rect.y + 5))
+    return yes_rect, no_rect
+
 def startingMenu(screen):
     """
     Display the starting menu with options to play as White or Black.
@@ -261,7 +431,7 @@ def endingScreen(screen, result, gs):
 
     while True:
         # Draw the last board position
-        drawGameState(screen, gs, [], ())  # Draw the board and pieces without highlights
+        drawGameState(screen, gs, [], (), moveLog, 0)  # Draw the board and pieces without highlights
 
         # Draw the semi-transparent overlay on top of the board
         screen.blit(overlay, (0, 0))
@@ -287,4 +457,5 @@ def endingScreen(screen, result, gs):
                 
 if __name__ == "__main__":
     main()
+
 

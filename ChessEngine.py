@@ -592,6 +592,7 @@ class Move():
     filesToCols = {"a": 0, "b": 1, "c": 2, "d": 3,
                    "e": 4, "f": 5, "g": 6, "h": 7}
     colsToFiles = {v: k for k, v in filesToCols.items()}
+    pieceToNotation = {1: "", 2: "N", 3: "B", 4: "R", 5: "Q", 6: "K"}
 
 
     def __init__(self, startSquare, endSquare, board, isEnPassantMove = False, isCastleMove = False, promotionChoice = None):
@@ -622,8 +623,15 @@ class Move():
 
     def getChessNotation(self):
         # note: the order of coding and chess notation is reversed (row, col) -> (file, rank)
-        return self.getRankFile(self.startRow, self.startCol) + self.getRankFile(self.endRow, self.endCol)
-    
+        if self.isCastleMove:
+            if self.startCol - self.endCol == 2:
+                return "O - O - O"
+            else:
+                return "O - O"
+        notation = self.pieceToNotation[self.pieceMoved % 10] + self.getRankFile(self.startRow, self.startCol) + ("x" if self.pieceCaptured != 0 else "→") + self.getRankFile(self.endRow, self.endCol)
+        if self.pawnPromotion:
+            notation += "=" + self.pieceToNotation[self.promotionChoice]
+        return notation
     
     def getRankFile(self, r, c):
         """
@@ -635,7 +643,7 @@ class Move():
         function return:
         - respective rank and file
         """
-        return self.colsToFiles[c], self.rowsToRanks[r]
+        return self.colsToFiles[c] + self.rowsToRanks[r]
 
 
 
