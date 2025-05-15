@@ -43,8 +43,32 @@ def main():
     clock = p.time.Clock()
 
     while True:  # Loop to restart the game after returning to the main menu
-        # Starting menu
-        playAsWhite = startingMenu(screen)
+        # Main menu
+        mode, color = startingMenu(screen)
+        ai1_depth = ai2_depth = None
+
+        if mode == "pve":
+            ai_depth = difficultyMenu(screen, "Choose Difficulty for AI")
+            if ai_depth is None:
+                continue  # Go back to main menu
+            playAsWhite = color
+            playerOne = playAsWhite
+            playerTwo = not playAsWhite
+            ai1_depth = ai_depth
+        elif mode == "pvp":
+            playAsWhite = True
+            playerOne = True
+            playerTwo = True
+        elif mode == "aivai":
+            ai1_depth = difficultyMenu(screen, "Choose Difficulty for White AI")
+            if ai1_depth is None:
+                continue  # Go back to main menu
+            ai2_depth = difficultyMenu(screen, "Choose Difficulty for Black AI")
+            if ai2_depth is None:
+                continue  # Go back to main menu
+            playAsWhite = True
+            playerOne = False
+            playerTwo = False
 
         screen.fill(p.Color("white"))
         gs = CsE.GameState()
@@ -52,11 +76,8 @@ def main():
         validMoves = gs.getValidMoves()
         moveMade = False  # Flag variables for when a move is made
         forwardMove = False # Flag variables to determine whether the move is made or undid
-        playerOne = True # True if a Human is playing white
-        playerTwo = True # True if a Human is playing black
         drawOfferPending = False
         drawOfferedBy = None
-        drawAcceptBox = False
         resignAccept = False
         moveLogPage = 0
         moveLog = []
@@ -133,8 +154,9 @@ def main():
                 elif e.type == p.KEYDOWN:
                     if e.key == p.K_z:  # Undo move
                         gs.undoMove()
+                        gs.undoMove()
                         forwardMove = False
-                        moveMade = True\
+                        moveMade = True
             
             if resignAccept:
                 winner = "Black" if gs.whiteToMove else "White"
@@ -201,6 +223,11 @@ def main():
             
             # AI turn
             if not humanTurn:
+                # Set AI depth based on side
+                if not playerOne and not playerTwo:  # AI vs AI
+                    SmartMoveFinder.DEPTH = ai1_depth if gs.whiteToMove else ai2_depth
+                else:
+                    SmartMoveFinder.DEPTH = ai1_depth
                 move = SmartMoveFinder.getMove(gs, validMoves)
                 gs.makeMove(move)
                 moveMade = True
@@ -277,7 +304,7 @@ def drawMoveLog(screen, moveLog, moveLogPage):
             moveText += f" {moveLog[i + 1]}"
         moveTexts.append(moveText)
 
-    moveLogLinePerPage = 5
+    moveLogLinePerPage = 15
     totalPages = max(1, (len(moveTexts) + moveLogLinePerPage - 1) // moveLogLinePerPage)
     moveLogPage = moveLogPage % totalPages  # wrap around
 
@@ -376,16 +403,18 @@ def drawAcceptDrawBox(screen):
 
 def startingMenu(screen):
     """
-    Display the starting menu with options to play as White or Black.
-    Parameters:
-    - screen: the Pygame screen
+    Display the starting menu with options for game mode.
     Returns:
-    - True if the player chooses White, False if the player chooses Black
+        ("pve", True/False) for player vs AI (True=white, False=black)
+        ("pvp", None) for player vs player
+        ("aivai", None) for AI vs AI
     """
     font = p.font.SysFont("Arial", 36)
     titleText = font.render("A Chess Game - by Doan Quoc Kien", True, p.Color("black"))
-    whiteButton = p.Rect(WIDTH // 2 - 125, HEIGHT // 2 - 60, 250, 50)
-    blackButton = p.Rect(WIDTH // 2 - 125, HEIGHT // 2 + 10, 250, 50)
+    whiteButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 40, 350, 50)
+    blackButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 20, 350, 50)
+    pvpButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 80, 350, 50)
+    aivaiButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 140, 350, 50)
 
     while True:
         screen.fill(p.Color("white"))
@@ -394,10 +423,13 @@ def startingMenu(screen):
         # Draw buttons
         p.draw.rect(screen, p.Color("gray"), whiteButton)
         p.draw.rect(screen, p.Color("gray"), blackButton)
-        whiteText = font.render("Play as White", True, p.Color("black"))
-        blackText = font.render("Play as Black", True, p.Color("black"))
-        screen.blit(whiteText, (whiteButton.x + 35, whiteButton.y + 5))
-        screen.blit(blackText, (blackButton.x + 35, blackButton.y + 5))
+        p.draw.rect(screen, p.Color("gray"), pvpButton)
+        p.draw.rect(screen, p.Color("gray"), aivaiButton)
+        fontBtn = p.font.SysFont("Arial", 28)
+        screen.blit(fontBtn.render("Play as White (vs AI)", True, p.Color("black")), (whiteButton.x + 75, whiteButton.y + 10))
+        screen.blit(fontBtn.render("Play as Black (vs AI)", True, p.Color("black")), (blackButton.x + 75, blackButton.y + 10))
+        screen.blit(fontBtn.render("Player vs Player", True, p.Color("black")), (pvpButton.x + 95, pvpButton.y + 10))
+        screen.blit(fontBtn.render("AI vs AI", True, p.Color("black")), (aivaiButton.x + 125, aivaiButton.y + 10))
 
         p.display.flip()
 
@@ -408,9 +440,13 @@ def startingMenu(screen):
             elif e.type == p.MOUSEBUTTONDOWN:
                 mouseX, mouseY = e.pos
                 if whiteButton.collidepoint(mouseX, mouseY):
-                    return True  # Play as White
+                    return ("pve", True)
                 elif blackButton.collidepoint(mouseX, mouseY):
-                    return False  # Play as Black
+                    return ("pve", False)
+                elif pvpButton.collidepoint(mouseX, mouseY):
+                    return ("pvp", None)
+                elif aivaiButton.collidepoint(mouseX, mouseY):
+                    return ("aivai", None)
 
 def endingScreen(screen, result, gs):
     """
@@ -454,6 +490,48 @@ def endingScreen(screen, result, gs):
                 mouseX, mouseY = e.pos
                 if menuButton.collidepoint(mouseX, mouseY):
                     return  # Return to the main menu
+
+def difficultyMenu(screen, text):
+    """
+    Display the difficulty selection menu for AI.
+    Returns: depth (int) or None if user chooses to go back.
+    """
+    font = p.font.SysFont("Arial", 36)
+    titleText = font.render(text, True, p.Color("black"))
+    easyButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 80, 350, 50)
+    normalButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 10, 350, 50)
+    hardButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 60, 350, 50)
+    backButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 130, 350, 50)
+
+    while True:
+        screen.fill(p.Color("white"))
+        screen.blit(titleText, (WIDTH // 2 - titleText.get_width() // 2, HEIGHT // 4))
+        fontBtn = p.font.SysFont("Arial", 28)
+        p.draw.rect(screen, p.Color("gray"), easyButton)
+        p.draw.rect(screen, p.Color("gray"), normalButton)
+        p.draw.rect(screen, p.Color("gray"), hardButton)
+        p.draw.rect(screen, p.Color("gray"), backButton)
+        screen.blit(fontBtn.render("Easy (Depth 2)", True, p.Color("black")), (easyButton.x + 90, easyButton.y + 10))
+        screen.blit(fontBtn.render("Normal (Depth 3)", True, p.Color("black")), (normalButton.x + 80, normalButton.y + 10))
+        screen.blit(fontBtn.render("Hard (Depth 4)", True, p.Color("black")), (hardButton.x + 90, hardButton.y + 10))
+        screen.blit(fontBtn.render("Back to Menu", True, p.Color("black")), (backButton.x + 100, backButton.y + 10))
+
+        p.display.flip()
+
+        for e in p.event.get():
+            if e.type == p.QUIT:
+                p.quit()
+                exit()
+            elif e.type == p.MOUSEBUTTONDOWN:
+                mouseX, mouseY = e.pos
+                if easyButton.collidepoint(mouseX, mouseY):
+                    return 2
+                elif normalButton.collidepoint(mouseX, mouseY):
+                    return 3
+                elif hardButton.collidepoint(mouseX, mouseY):
+                    return 4
+                elif backButton.collidepoint(mouseX, mouseY):
+                    return None  # Signal to go back to main menu
                 
 if __name__ == "__main__":
     main()
