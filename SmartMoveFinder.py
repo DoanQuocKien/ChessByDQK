@@ -177,12 +177,8 @@ def scoreBoard(gs):
     # Additional scoring conditions
 
     # 1. King safety
-    if gs.whiteToMove:
-        score += evaluateKingSafety(gs, True)
-        score -= evaluateKingSafety(gs, False)
-    else:
-        score += evaluateKingSafety(gs, False)
-        score -= evaluateKingSafety(gs, True)
+    score += evaluateKingSafety(gs, True)
+    score -= evaluateKingSafety(gs, False)
 
     # 2. Control of the center
     centerSquares = [(3, 3), (3, 4), (4, 3), (4, 4)]

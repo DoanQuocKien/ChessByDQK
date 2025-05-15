@@ -6,9 +6,14 @@ import ChessEngine as CsE
 import copy
 import SmartMoveFinder as SmartMoveFinder
 import time
+import ReplayViewer
+import os
+import pickle
+from datetime import datetime
 
 WIDTH = 700  # Increase width to include sidebar
 HEIGHT = 514
+NAV_BAR_HEIGHT = 60
 DIMENSION = 8 #dimensions of a chess board are 8x8
 SQ_SIZE = HEIGHT // DIMENSION
 MAX_FPS = 15 #for animation
@@ -17,7 +22,7 @@ IMAGES = {}
 RESIGN_BUTTON = p.Rect(514, 470, 180, 35)
 OFFER_DRAW_BUTTON = p.Rect(514, 420, 180, 35)
 
-moveLog = []
+SAVE_DIR = "saved_games"
 
 pieces = {
     11: "wp", 12: "wN", 13: "wB", 14: "wR", 15: "wQ", 16: "wK",
@@ -34,18 +39,37 @@ def loadImages():
     for piece, filename in pieces.items():
         IMAGES[piece] = p.transform.scale(p.image.load(f"images/{filename}.png"), (SQ_SIZE, SQ_SIZE))
 
+def saveGame(moveLog, positions):
+    if not os.path.exists(SAVE_DIR):
+        os.makedirs(SAVE_DIR)
+    now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{now}.pkl"
+    filepath = os.path.join(SAVE_DIR, filename)
+    with open(filepath, "wb") as f:
+        pickle.dump({"moveLog": moveLog, "positions": positions}, f)
+
 def main():
     """
     Main driver. Handle User Input and Updating Graphics
     """
     p.init()
-    screen = p.display.set_mode((WIDTH, HEIGHT))
+    loadImages()
+    screen = p.display.set_mode((WIDTH, HEIGHT + NAV_BAR_HEIGHT))
     clock = p.time.Clock()
 
     while True:  # Loop to restart the game after returning to the main menu
         # Main menu
         mode, color = startingMenu(screen)
         ai1_depth = ai2_depth = None
+
+        if mode == "replay":
+            while True:
+                selected_file = replayMenuUI(screen)
+                if not selected_file:
+                    break
+                replay_game = ReplayViewer.ReplayManager().load_game(selected_file)
+                replayBoardUI(screen, replay_game)
+            continue  # Return to main menu
 
         if mode == "pve":
             ai_depth = difficultyMenu(screen, "Choose Difficulty for AI")
@@ -72,7 +96,7 @@ def main():
 
         screen.fill(p.Color("white"))
         gs = CsE.GameState()
-        gs.whiteToMove = playAsWhite  # Set the starting player based on the menu choice
+        gs.whiteToMove = True  # Set the starting player based on the menu choice
         validMoves = gs.getValidMoves()
         moveMade = False  # Flag variables for when a move is made
         forwardMove = False # Flag variables to determine whether the move is made or undid
@@ -81,9 +105,8 @@ def main():
         resignAccept = False
         moveLogPage = 0
         moveLog = []
-        moveLogPage = 0
+        positions = [copy.deepcopy(gs.board)]
 
-        loadImages()
         running = True
         squareSelected = ()  # Keep track of last click: tuple(row, col)
         playerClicks = []  # Keep track of players click: two tuples(row_from, col_from), (row_to, col_to)
@@ -109,7 +132,7 @@ def main():
                                     ai_score = SmartMoveFinder.scoreBoard(gs)
                                     if (gs.whiteToMove and ai_score <= 0) or (not gs.whiteToMove and ai_score >= 0):
                                         moveLog.append("1/2 - 1/2 (Draw agreed)")
-                                        endingScreen(screen, "Draw", gs)
+                                        endingScreen(screen, "Draw", gs, moveLog, positions)
                                         break
                         continue
                     # Give Up button
@@ -161,7 +184,7 @@ def main():
             if resignAccept:
                 winner = "Black" if gs.whiteToMove else "White"
                 moveLog.append("0 - 1 (Give up)" if gs.whiteToMove else "1 - 0 (Give up)")
-                endingScreen(screen, f"{winner} Wins (Opponent gave up)", gs)
+                endingScreen(screen, f"{winner} Wins (Opponent gave up)", gs, moveLog, positions)
                 break
 
             # --- Draw offer accept box appears immediately if pending and it's the other player's turn ---
@@ -178,7 +201,7 @@ def main():
                             mouseX, mouseY = e.pos
                             if yes_rect.collidepoint(mouseX, mouseY):
                                 moveLog.append("1/2 - 1/2 (Draw agreed)")
-                                endingScreen(screen, "Draw", gs)
+                                endingScreen(screen, "Draw", gs, moveLog, positions)
                                 waiting = False
                                 running = False
                                 break
@@ -198,8 +221,16 @@ def main():
                         checkAdd = "+"
                 if forwardMove:
                     moveLog.append(move.getChessNotation() + checkAdd)  # Add move notation to the log
-                elif len(moveLog) != 0:
-                    moveLog.pop()
+                    positions.append(copy.deepcopy(gs.board))
+                else:
+                    if len(moveLog) != 0:
+                        moveLog.pop()
+                    if len(moveLog) != 0:
+                        moveLog.pop()
+                    if len(positions) > 1:
+                        positions.pop()
+                    if len(positions) > 1:
+                        positions.pop()
                 moveMade = False 
 
             drawGameState(screen, gs, validMoves, squareSelected, moveLog, moveLogPage)
@@ -218,7 +249,7 @@ def main():
                 else:
                     result = "Draw"
                     moveLog.append("1/2 - 1/2")
-                endingScreen(screen, result, gs)  # Pass the game state to the ending screen
+                endingScreen(screen, result, gs, moveLog, positions)  # Pass the game state to the ending screen
                 break  # Break out of the game loop to return to the main menu
             
             # AI turn
@@ -233,9 +264,23 @@ def main():
                 moveMade = True
 
             if moveMade:
-                moveLog.append(move.getChessNotation())  # Add move notation to the log
                 validMoves = gs.getValidMoves()
                 moveMade = False
+                checkAdd = "" 
+                if (gs.whiteToMove and gs.squareUnderAttack(gs.whiteKingLocation[0], gs.whiteKingLocation[1])) or (not gs.whiteToMove and gs.squareUnderAttack(gs.blackKingLocation[0], gs.blackKingLocation[1])):
+                    if gs.checkMate:
+                        checkAdd = "#"
+                    else:
+                        checkAdd = "+"
+                if forwardMove:
+                    moveLog.append(move.getChessNotation() + checkAdd)  # Add move notation to the log
+                    positions.append(copy.deepcopy(gs.board))
+                else:
+                    if len(moveLog) != 0:
+                        moveLog.pop()
+                    if len(moveLog) != 0:
+                        moveLog.pop()
+                moveMade = False 
 
 def highlightSquare(screen, gs, validMoves, sqSelected):
     """
@@ -286,7 +331,7 @@ def drawPieces(screen, board):
         for c in range(DIMENSION):
             piece = board[r][c]
             if piece != 0: #not empty square
-                screen.blit(IMAGES[piece], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
+                screen.blit(IMAGES[int(piece)], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
 def drawMoveLog(screen, moveLog, moveLogPage):
     """
@@ -402,35 +447,27 @@ def drawAcceptDrawBox(screen):
     return yes_rect, no_rect
 
 def startingMenu(screen):
-    """
-    Display the starting menu with options for game mode.
-    Returns:
-        ("pve", True/False) for player vs AI (True=white, False=black)
-        ("pvp", None) for player vs player
-        ("aivai", None) for AI vs AI
-    """
     font = p.font.SysFont("Arial", 36)
     titleText = font.render("A Chess Game - by Doan Quoc Kien", True, p.Color("black"))
     whiteButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 40, 350, 50)
     blackButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 20, 350, 50)
     pvpButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 80, 350, 50)
     aivaiButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 140, 350, 50)
+    replayButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 200, 350, 50)
 
     while True:
         screen.fill(p.Color("white"))
         screen.blit(titleText, (WIDTH // 2 - titleText.get_width() // 2, HEIGHT // 4))
-
-        # Draw buttons
-        p.draw.rect(screen, p.Color("gray"), whiteButton)
-        p.draw.rect(screen, p.Color("gray"), blackButton)
-        p.draw.rect(screen, p.Color("gray"), pvpButton)
-        p.draw.rect(screen, p.Color("gray"), aivaiButton)
         fontBtn = p.font.SysFont("Arial", 28)
-        screen.blit(fontBtn.render("Play as White (vs AI)", True, p.Color("black")), (whiteButton.x + 75, whiteButton.y + 10))
-        screen.blit(fontBtn.render("Play as Black (vs AI)", True, p.Color("black")), (blackButton.x + 75, blackButton.y + 10))
-        screen.blit(fontBtn.render("Player vs Player", True, p.Color("black")), (pvpButton.x + 95, pvpButton.y + 10))
-        screen.blit(fontBtn.render("AI vs AI", True, p.Color("black")), (aivaiButton.x + 125, aivaiButton.y + 10))
-
+        for btn, label, x_offset in [
+            (whiteButton, "Play as White (vs AI)", 75),
+            (blackButton, "Play as Black (vs AI)", 75),
+            (pvpButton, "Player vs Player", 95),
+            (aivaiButton, "AI vs AI", 135),
+            (replayButton, "Replay Saved Games", 60)
+        ]:
+            p.draw.rect(screen, p.Color("gray"), btn)
+            screen.blit(fontBtn.render(label, True, p.Color("black")), (btn.x + x_offset, btn.y + 10))
         p.display.flip()
 
         for e in p.event.get():
@@ -447,8 +484,10 @@ def startingMenu(screen):
                     return ("pvp", None)
                 elif aivaiButton.collidepoint(mouseX, mouseY):
                     return ("aivai", None)
+                elif replayButton.collidepoint(mouseX, mouseY):
+                    return ("replay", None)
 
-def endingScreen(screen, result, gs):
+def endingScreen(screen, result, gs, moveLog, positions):
     """
     Display the ending screen with the result of the game.
     Parameters:
@@ -464,6 +503,7 @@ def endingScreen(screen, result, gs):
     overlay = p.Surface((WIDTH, HEIGHT))
     overlay.set_alpha(150)  # Set transparency (0 = fully transparent, 255 = fully opaque)
     overlay.fill(p.Color("gray"))  # Fill the overlay with a gray color
+    saveGame(moveLog, positions)
 
     while True:
         # Draw the last board position
@@ -532,7 +572,196 @@ def difficultyMenu(screen, text):
                     return 4
                 elif backButton.collidepoint(mouseX, mouseY):
                     return None  # Signal to go back to main menu
-                
+
+def replayMenuUI(screen):
+    font = p.font.SysFont("Arial", 32)
+    smallFont = p.font.SysFont("Arial", 18)
+    manager = ReplayViewer.ReplayManager()
+    files = manager.list_games()
+    if not files:
+        screen.fill(p.Color("white"))
+        msg = font.render("No saved games found.", True, p.Color("black"))
+        screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
+        p.display.flip()
+        p.time.wait(1500)
+        return None
+
+    selected = 0
+    returnBtn = p.Rect(WIDTH // 2 - 100, HEIGHT - 60, 225, 40)
+    deleteBtn = p.Rect(WIDTH - 70, 20, 60, 24)
+    savesPerPage = 7
+    page = 0
+
+    arrowY = HEIGHT - 40  # 40 pixels from the bottom, adjust as needed
+    arrowLeft = p.Rect(WIDTH // 2 - 60, arrowY, 40, 40)
+    arrowRight = p.Rect(WIDTH // 2 + 20, arrowY, 40, 40)
+
+    def get_page_files():
+        start = page * savesPerPage
+        end = min(start + savesPerPage, len(files))
+        return files[start:end]
+
+    while True:
+        screen.fill(p.Color("white"))
+        title = font.render("Select a saved game to replay", True, p.Color("black"))
+        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 40))
+
+        # Draw delete all saves button
+        p.draw.rect(screen, p.Color("red"), deleteBtn)
+        screen.blit(smallFont.render("Delete", True, p.Color("white")), (deleteBtn.x + 7, deleteBtn.y + 2))
+
+        page_files = get_page_files()
+        for i, fname in enumerate(page_files):
+            color = p.Color("yellow") if (selected - page * savesPerPage) == i else p.Color("gray")
+            btn = p.Rect(WIDTH // 2 - 200, 120 + i * 60, 400, 50)
+            p.draw.rect(screen, color, btn)
+            screen.blit(font.render(os.path.basename(fname).replace(".pkl", ""), True, p.Color("black")), (btn.x + 20, btn.y + 10))
+
+        # Draw return to menu button
+        p.draw.rect(screen, p.Color("gray"), returnBtn)
+        screen.blit(font.render("Return to Menu", True, p.Color("black")), (returnBtn.x + 20, returnBtn.y + 2))
+
+        # Draw paging arrows if needed
+        totalPages = (len(files) + savesPerPage - 1) // savesPerPage
+        if totalPages > 1:
+            # Left arrow
+            p.draw.polygon(screen, p.Color("black"), [
+                (arrowLeft.x + 30, arrowLeft.y + 10),
+                (arrowLeft.x + 10, arrowLeft.y + 20),
+                (arrowLeft.x + 30, arrowLeft.y + 30)
+            ])
+            # Right arrow
+            p.draw.polygon(screen, p.Color("black"), [
+                (arrowRight.x + 10, arrowRight.y + 10),
+                (arrowRight.x + 30, arrowRight.y + 20),
+                (arrowRight.x + 10, arrowRight.y + 30)
+            ])
+            # Page indicator
+            pageText = font.render(f"{page+1}/{totalPages}", True, p.Color("black"))
+            screen.blit(pageText, (WIDTH // 2 - pageText.get_width() // 2, HEIGHT - 55))
+
+        p.display.flip()
+
+        for e in p.event.get():
+            if e.type == p.QUIT:
+                p.quit()
+                exit()
+            elif e.type == p.KEYDOWN:
+                if e.key == p.K_UP:
+                    if selected > 0:
+                        selected -= 1
+                    else:
+                        selected = len(files) - 1
+                    page = selected // savesPerPage
+                elif e.key == p.K_DOWN:
+                    if selected < len(files) - 1:
+                        selected += 1
+                    else:
+                        selected = 0
+                    page = selected // savesPerPage
+                elif e.key == p.K_ESCAPE:
+                    return None
+                elif e.key == p.K_RETURN:
+                    return files[selected]
+                elif e.key == p.K_LEFT and totalPages > 1:
+                    page = (page - 1) % totalPages
+                    selected = page * savesPerPage
+                elif e.key == p.K_RIGHT and totalPages > 1:
+                    page = (page + 1) % totalPages
+                    selected = page * savesPerPage
+            elif e.type == p.MOUSEBUTTONDOWN:
+                mouseX, mouseY = e.pos
+                # Delete all saves
+                if deleteBtn.collidepoint(mouseX, mouseY):
+                    for f in files:
+                        try:
+                            os.remove(f)
+                        except Exception:
+                            pass
+                    files = []
+                    selected = 0
+                    page = 0
+                    screen.fill(p.Color("white"))
+                    msg = font.render("All saves deleted.", True, p.Color("black"))
+                    screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
+                    p.display.flip()
+                    p.time.wait(1000)
+                    return None
+                # Return to menu
+                if returnBtn.collidepoint(mouseX, mouseY):
+                    return None
+                # Left arrow
+                if totalPages > 1 and arrowLeft.collidepoint(mouseX, mouseY):
+                    page = (page - 1) % totalPages
+                    selected = page * savesPerPage
+                # Right arrow
+                if totalPages > 1 and arrowRight.collidepoint(mouseX, mouseY):
+                    page = (page + 1) % totalPages
+                    selected = page * savesPerPage
+                # File selection
+                for i, fname in enumerate(page_files):
+                    btn = p.Rect(WIDTH // 2 - 200, 120 + i * 60, 400, 50)
+                    if btn.collidepoint(mouseX, mouseY):
+                        return fname
+
+def replayBoardUI(screen, replay_game):
+    idx = 0
+    font = p.font.SysFont("Arial", 24)
+    navBarHeight = 60
+    arrowOffsetY = HEIGHT + (navBarHeight - 40) // 2
+    backButton = p.Rect(10, HEIGHT + 10, 150, 40)  # Bottom left
+    moveLog = replay_game.moveLog
+    currPositions = replay_game.positions
+
+    while True:
+        screen.fill(p.Color("white"))
+        # Guard against empty positions
+        if not currPositions:
+            msg = font.render("No positions to display.", True, p.Color("red"))
+            screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
+            p.display.flip()
+            for e in p.event.get():
+                if e.type == p.QUIT or e.type == p.KEYDOWN or e.type == p.MOUSEBUTTONDOWN:
+                    return None
+            continue
+
+        idx = max(0, min(idx, len(currPositions) - 1))
+
+        # Create a temporary GameState for drawing
+        gs_temp = CsE.GameState()
+        gs_temp.board = currPositions[idx]
+        drawGameState(screen, gs_temp, [], (), moveLog, idx // 2)  # moveLogPage = idx // 2
+
+        # Draw navigation bar
+        p.draw.rect(screen, p.Color("lightgray"), (0, HEIGHT, WIDTH, navBarHeight))
+        # Draw back button (Return to List)
+        p.draw.rect(screen, p.Color("gray"), backButton)
+        screen.blit(font.render("Return to List", True, p.Color("black")), (backButton.x + 10, backButton.y + 5))
+        # Draw move number
+        moveNumText = font.render(f"Move {idx}/{len(currPositions)-1}", True, p.Color("black"))
+        screen.blit(moveNumText, (WIDTH // 2 - moveNumText.get_width() // 2, HEIGHT + 10))
+        # Draw navigation hint
+        hintFont = p.font.SysFont("Arial", 16)
+        hintText = hintFont.render("Use ← and → keys to navigate moves. ESC to return.", True, p.Color("dimgray"))
+        screen.blit(hintText, (WIDTH // 2 - hintText.get_width() // 2, HEIGHT + navBarHeight - 25))
+        p.display.flip()
+
+        for e in p.event.get():
+            if e.type == p.QUIT:
+                p.quit()
+                exit()
+            elif e.type == p.MOUSEBUTTONDOWN:
+                mouseX, mouseY = e.pos
+                if backButton.collidepoint(mouseX, mouseY):
+                    return
+            elif e.type == p.KEYDOWN:
+                if e.key == p.K_ESCAPE:
+                    return
+                elif e.key == p.K_LEFT:
+                    idx = max(0, idx - 1)
+                elif e.key == p.K_RIGHT:
+                    idx = min(len(currPositions) - 1, idx + 1)
+
 if __name__ == "__main__":
     main()
 
