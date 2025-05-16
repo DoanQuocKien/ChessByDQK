@@ -29,8 +29,13 @@ class ReplayManager:
         files.sort()
         return [os.path.join(SAVE_DIR, f) for f in files]
 
-    def list_games(self):
-        return self.games
+    def list_games(self, directory=SAVE_DIR):
+        if not os.path.exists(directory):
+            return []
+        return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".pkl")]
 
     def load_game(self, filepath):
         return ReplayGame(filepath)
+
+manager = ReplayManager()
+files = manager.list_games()

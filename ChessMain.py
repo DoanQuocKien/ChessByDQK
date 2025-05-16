@@ -23,7 +23,8 @@ IMAGES = {}
 RESIGN_BUTTON = p.Rect(514, 470, 180, 35)
 OFFER_DRAW_BUTTON = p.Rect(514, 420, 180, 35)
 
-SAVE_DIR = "saved_games"
+global USERNAME
+USERNAME = "Guest"
 
 pieces = {
     11: "wp", 12: "wN", 13: "wB", 14: "wR", 15: "wQ", 16: "wK",
@@ -38,16 +39,62 @@ def loadImages():
     for piece, filename in pieces.items():
         IMAGES[piece] = p.transform.scale(p.image.load(f"images/{filename}.png"), (SQ_SIZE, SQ_SIZE))
 
+def get_save_dir():
+    return os.path.join("saved_games", USERNAME)
+
 def saveGame(moveLog, positions):
-    if not os.path.exists(SAVE_DIR):
-        os.makedirs(SAVE_DIR)
+    save_dir = get_save_dir()
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{now}.pkl"
-    filepath = os.path.join(SAVE_DIR, filename)
+    filepath = os.path.join(save_dir, filename)
     with open(filepath, "wb") as f:
         pickle.dump({"moveLog": moveLog, "positions": positions}, f)
 
+def promptUsername(screen, WIDTH, HEIGHT, current_name):
+    import pygame as p
+    font_path = "font/DejaVuSans.ttf"
+    font = p.font.Font(font_path, 32)
+    input_box = p.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 30, 300, 50)
+    color_inactive = p.Color('lightskyblue3')
+    color_active = p.Color('dodgerblue2')
+    color = color_inactive
+    active = True
+    text = ""
+    done = False
+
+    while not done:
+        for event in p.event.get():
+            if event.type == p.QUIT:
+                p.quit()
+                exit()
+            elif event.type == p.KEYDOWN:
+                if event.key == p.K_RETURN:
+                    if text.strip():
+                        return text.strip()
+                    else:
+                        return current_name
+                elif event.key == p.K_ESCAPE:
+                    return current_name
+                elif event.key == p.K_BACKSPACE:
+                    text = text[:-1]
+                else:
+                    if len(text) < 16 and event.unicode.isprintable():
+                        text += event.unicode
+
+        screen.fill(p.Color("white"))
+        prompt = font.render("Enter username:", True, p.Color("black"))
+        screen.blit(prompt, (WIDTH // 2 - prompt.get_width() // 2, HEIGHT // 2 - 80))
+        # Draw input box
+        p.draw.rect(screen, color, input_box, 2)
+        txt_surface = font.render(text or current_name, True, p.Color("black"))
+        screen.blit(txt_surface, (input_box.x + 10, input_box.y + 10))
+        p.display.flip()
+    return current_name
+
 def main():
+    global USERNAME
     p.init()
     loadImages()
     screen = p.display.set_mode((WIDTH, HEIGHT + NAV_BAR_HEIGHT))
@@ -113,9 +160,11 @@ def main():
             # Draw the offer draw and resign buttons
             p.draw.rect(screen, p.Color("gray"), OFFER_DRAW_BUTTON)
             p.draw.rect(screen, p.Color("gray"), RESIGN_BUTTON)
-            fontBtn = p.font.SysFont("Arial", 24)
-            screen.blit(fontBtn.render("Offer Draw", True, p.Color("black")), (OFFER_DRAW_BUTTON.x + 20, OFFER_DRAW_BUTTON.y + 5))
-            screen.blit(fontBtn.render("Resign", True, p.Color("black")), (RESIGN_BUTTON.x + 50, RESIGN_BUTTON.y + 5))
+            font_path = "font/DejaVuSans.ttf"  
+            fontBtn = p.font.Font(font_path, 16)
+            screen.blit(fontBtn.render("Offer Draw", True, p.Color("black")), (OFFER_DRAW_BUTTON.x + 40, OFFER_DRAW_BUTTON.y + 10))
+            screen.blit(fontBtn.render("Resign", True, p.Color("black")), (RESIGN_BUTTON.x + 60, RESIGN_BUTTON.y + 10))
+
             p.display.flip()
 
             humanTurn = (gs.whiteToMove and playerOne) or (not gs.whiteToMove and playerTwo)
@@ -304,7 +353,12 @@ def main():
                 moveMade = False
 
 def startingMenu(screen):
-    font = p.font.SysFont("Arial", 36)
+    global USERNAME
+    font_path = "font/DejaVuSans.ttf"
+    font = p.font.Font(font_path, 36)
+    fontBtn = p.font.Font(font_path, 28)
+    fontBtnUser = p.font.Font(font_path, 20)
+    fontUser = p.font.Font(font_path, 24)
     titleText = font.render("A Chess Game - by Doan Quoc Kien", True, p.Color("black"))
     whiteButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 40, 350, 50)
     blackButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 + 20, 350, 50)
@@ -315,16 +369,29 @@ def startingMenu(screen):
     while True:
         screen.fill(p.Color("white"))
         screen.blit(titleText, (WIDTH // 2 - titleText.get_width() // 2, HEIGHT // 4))
-        fontBtn = p.font.SysFont("Arial", 28)
         for btn, label, x_offset in [
-            (whiteButton, "Play as White (vs AI)", 75),
-            (blackButton, "Play as Black (vs AI)", 75),
-            (pvpButton, "Player vs Player", 95),
-            (aivaiButton, "AI vs AI", 135),
-            (replayButton, "Replay Saved Games", 60)
+            (whiteButton, "Play as White (vs AI)", 32),
+            (blackButton, "Play as Black (vs AI)", 35),
+            (pvpButton, "Player vs Player", 63),
+            (aivaiButton, "AI vs AI", 117),
+            (replayButton, "Replay Saved Games", 27)
         ]:
             p.draw.rect(screen, p.Color("gray"), btn)
             screen.blit(fontBtn.render(label, True, p.Color("black")), (btn.x + x_offset, btn.y + 10))
+
+        # Draw username and change button at top right
+        userText = fontUser.render(f"User: {USERNAME}", True, p.Color("black"))
+        user_rect = userText.get_rect()
+        changeBtn_width = 90
+        gap = 10
+        total_width = userText.get_width() + gap + changeBtn_width
+        start_x = WIDTH - 20 - total_width  # 20px padding from right edge
+        user_rect.topleft = (start_x, 10)
+        screen.blit(userText, user_rect)
+        changeBtn = p.Rect(user_rect.right + gap, user_rect.y, changeBtn_width, 30)
+        p.draw.rect(screen, p.Color("lightblue"), changeBtn)
+        screen.blit(fontBtnUser.render("Change", True, p.Color("black")), (changeBtn.x + 5, changeBtn.y + 3))
+
         p.display.flip()
 
         for e in p.event.get():
@@ -343,6 +410,8 @@ def startingMenu(screen):
                     return ("aivai", None)
                 elif replayButton.collidepoint(mouseX, mouseY):
                     return ("replay", None)
+                elif changeBtn.collidepoint(mouseX, mouseY):
+                    USERNAME = promptUsername(screen, WIDTH, HEIGHT, USERNAME)
 
 def endingScreen(screen, result, gs, moveLog, positions):
     """
@@ -352,7 +421,8 @@ def endingScreen(screen, result, gs, moveLog, positions):
     - result: a string indicating the result ("White Wins", "Black Wins", "Draw")
     - gs: the current game state (to display the last board position)
     """
-    font = p.font.SysFont("Arial", 36)
+    font_path = "font/DejaVuSans.ttf"  
+    font = p.font.Font(font_path, 36)
     resultText = font.render(result, True, p.Color("black"))
     menuButton = p.Rect(WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50)
     overlay = p.Surface((WIDTH, HEIGHT))
@@ -383,7 +453,8 @@ def difficultyMenu(screen, text):
     Display the difficulty selection menu for AI.
     Returns: depth (int) or None if user chooses to go back.
     """
-    font = p.font.SysFont("Arial", 36)
+    font_path = "font/DejaVuSans.ttf"  
+    font = p.font.Font(font_path, 36)
     titleText = font.render(text, True, p.Color("black"))
     easyButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 80, 350, 50)
     normalButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 10, 350, 50)
@@ -393,15 +464,15 @@ def difficultyMenu(screen, text):
     while True:
         screen.fill(p.Color("white"))
         screen.blit(titleText, (WIDTH // 2 - titleText.get_width() // 2, HEIGHT // 4))
-        fontBtn = p.font.SysFont("Arial", 28)
+        fontBtn = p.font.Font(font_path, 28)
         p.draw.rect(screen, p.Color("gray"), easyButton)
         p.draw.rect(screen, p.Color("gray"), normalButton)
         p.draw.rect(screen, p.Color("gray"), hardButton)
         p.draw.rect(screen, p.Color("gray"), backButton)
-        screen.blit(fontBtn.render("Easy (Depth 2)", True, p.Color("black")), (easyButton.x + 90, easyButton.y + 10))
-        screen.blit(fontBtn.render("Normal (Depth 3)", True, p.Color("black")), (normalButton.x + 80, normalButton.y + 10))
-        screen.blit(fontBtn.render("Hard (Depth 4)", True, p.Color("black")), (hardButton.x + 90, hardButton.y + 10))
-        screen.blit(fontBtn.render("Back to Menu", True, p.Color("black")), (backButton.x + 100, backButton.y + 10))
+        screen.blit(fontBtn.render("Easy (Depth 2)", True, p.Color("black")), (easyButton.x + 68, easyButton.y + 10))
+        screen.blit(fontBtn.render("Normal (Depth 3)", True, p.Color("black")), (normalButton.x + 52, normalButton.y + 10))
+        screen.blit(fontBtn.render("Hard (Depth 4)", True, p.Color("black")), (hardButton.x + 68, hardButton.y + 10))
+        screen.blit(fontBtn.render("Back to Menu", True, p.Color("black")), (backButton.x + 78, backButton.y + 10))
 
         p.display.flip()
 
@@ -421,10 +492,11 @@ def difficultyMenu(screen, text):
                     return None  # Signal to go back to main menu
 
 def replayMenuUI(screen):
-    font = p.font.SysFont("Arial", 32)
-    smallFont = p.font.SysFont("Arial", 18)
+    font_path = "font/DejaVuSans.ttf"  
+    font = p.font.Font(font_path, 25)
+    smallFont = p.font.Font(font_path, 18)
     manager = ReplayViewer.ReplayManager()
-    files = manager.list_games()
+    files = manager.list_games(get_save_dir())
     if not files:
         screen.fill(p.Color("white"))
         msg = font.render("No saved games found.", True, p.Color("black"))
@@ -435,11 +507,10 @@ def replayMenuUI(screen):
 
     selected = 0
     returnBtn = p.Rect(WIDTH // 2 - 113, HEIGHT - 60, 225, 40)
-    deleteBtn = p.Rect(WIDTH - 70, 20, 60, 24)
     savesPerPage = 5
     page = 0
 
-    arrowY = HEIGHT - 20  # 40 pixels from the bottom, adjust as needed
+    arrowY = HEIGHT - 20
     arrowLeft = p.Rect(WIDTH // 2 - 60, arrowY, 40, 40)
     arrowRight = p.Rect(WIDTH // 2 + 20, arrowY, 40, 40)
 
@@ -453,20 +524,22 @@ def replayMenuUI(screen):
         title = font.render("Select a saved game to replay", True, p.Color("black"))
         screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 40))
 
-        # Draw delete all saves button
-        p.draw.rect(screen, p.Color("red"), deleteBtn)
-        screen.blit(smallFont.render("Delete", True, p.Color("white")), (deleteBtn.x + 7, deleteBtn.y + 2))
-
         page_files = get_page_files()
+        del_btn_rects = []
         for i, fname in enumerate(page_files):
-            color = p.Color("yellow") if (selected - page * savesPerPage) == i else p.Color("gray")
+            color = p.Color("gray")
             btn = p.Rect(WIDTH // 2 - 200, 120 + i * 60, 400, 50)
             p.draw.rect(screen, color, btn)
             screen.blit(font.render(os.path.basename(fname).replace(".pkl", ""), True, p.Color("black")), (btn.x + 20, btn.y + 10))
+            # Draw small red delete button just to the right of the save button
+            del_btn = p.Rect(btn.right + 10, btn.y + 10, 30, 30)
+            p.draw.rect(screen, p.Color("red"), del_btn)
+            screen.blit(smallFont.render("X", True, p.Color("white")), (del_btn.x + 8, del_btn.y + 4))
+            del_btn_rects.append((del_btn, fname))
 
         # Draw return to menu button
         p.draw.rect(screen, p.Color("gray"), returnBtn)
-        screen.blit(font.render("Return to Menu", True, p.Color("black")), (returnBtn.x + 20, returnBtn.y + 2))
+        screen.blit(font.render("Return to Menu", True, p.Color("black")), (returnBtn.x + 15, returnBtn.y + 5))
 
         # Draw paging arrows if needed
         totalPages = (len(files) + savesPerPage - 1) // savesPerPage
@@ -518,22 +591,6 @@ def replayMenuUI(screen):
                     selected = page * savesPerPage
             elif e.type == p.MOUSEBUTTONDOWN:
                 mouseX, mouseY = e.pos
-                # Delete all saves
-                if deleteBtn.collidepoint(mouseX, mouseY):
-                    for f in files:
-                        try:
-                            os.remove(f)
-                        except Exception:
-                            pass
-                    files = []
-                    selected = 0
-                    page = 0
-                    screen.fill(p.Color("white"))
-                    msg = font.render("All saves deleted.", True, p.Color("black"))
-                    screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
-                    p.display.flip()
-                    p.time.wait(1000)
-                    return None
                 # Return to menu
                 if returnBtn.collidepoint(mouseX, mouseY):
                     return None
@@ -550,6 +607,19 @@ def replayMenuUI(screen):
                     btn = p.Rect(WIDTH // 2 - 200, 120 + i * 60, 400, 50)
                     if btn.collidepoint(mouseX, mouseY):
                         return fname
+                # Check per-save delete buttons
+                for del_btn, fname in del_btn_rects:
+                    if del_btn.collidepoint(mouseX, mouseY):
+                        try:
+                            os.remove(fname)
+                            files.remove(fname)
+                            # Adjust selection/page if needed
+                            if selected >= len(files):
+                                selected = max(0, len(files) - 1)
+                            page = selected // savesPerPage
+                        except Exception:
+                            pass
+                        break  # Only allow one delete per click
 
 if __name__ == "__main__":
     main()
