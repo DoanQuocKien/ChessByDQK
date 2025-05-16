@@ -630,7 +630,7 @@ class Move():
                 return "O - O"
         notation = self.pieceToNotation[self.pieceMoved % 10] + self.getRankFile(self.startRow, self.startCol) + ("x" if self.pieceCaptured != 0 else "→") + self.getRankFile(self.endRow, self.endCol)
         if self.pawnPromotion:
-            notation += "=" + self.pieceToNotation[self.promotionChoice]
+            notation += "=" + self.pieceToNotation[self.promotionChoice if self.promotionChoice else 5]
         return notation
     
     def getRankFile(self, r, c):
