@@ -1,6 +1,12 @@
 """
-Main file to receive user inputs and display chess matches (CurrentGameState object)
+ChessMain.py
+
+Main file for the Chess game. Handles user input, game state, menus, saving/loading games,
+and user interface. Each username has a separate save folder.
+
+Author: Doan Quoc Kien
 """
+
 import pygame as p
 import ChessEngine as CsE
 import copy
@@ -23,7 +29,6 @@ IMAGES = {}
 RESIGN_BUTTON = p.Rect(514, 470, 180, 35)
 OFFER_DRAW_BUTTON = p.Rect(514, 420, 180, 35)
 
-global USERNAME
 USERNAME = "Guest"
 
 pieces = {
@@ -36,13 +41,29 @@ pieceChoose = {
 }
 
 def loadImages():
+    """
+    Loads chess piece images into the global IMAGES dictionary.
+    """
     for piece, filename in pieces.items():
         IMAGES[piece] = p.transform.scale(p.image.load(f"images/{filename}.png"), (SQ_SIZE, SQ_SIZE))
 
 def get_save_dir():
+    """
+    Returns the directory path for the current user's saved games.
+
+    Returns:
+        str: Path to the user's save directory.
+    """
     return os.path.join("saved_games", USERNAME)
 
 def saveGame(moveLog, positions):
+    """
+    Saves the current game's move log and positions to a file in the user's save directory.
+
+    Parameters:
+        moveLog (list): List of move notations.
+        positions (list): List of board positions (2D arrays).
+    """
     save_dir = get_save_dir()
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -53,14 +74,24 @@ def saveGame(moveLog, positions):
         pickle.dump({"moveLog": moveLog, "positions": positions}, f)
 
 def promptUsername(screen, WIDTH, HEIGHT, current_name):
-    import pygame as p
+    """
+    Prompts the user to enter a new username.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        WIDTH (int): Width of the window.
+        HEIGHT (int): Height of the window.
+        current_name (str): The current username.
+
+    Returns:
+        str: The new username entered by the user, or the current name if cancelled.
+    """
     font_path = "font/DejaVuSans.ttf"
     font = p.font.Font(font_path, 32)
     input_box = p.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 30, 300, 50)
     color_inactive = p.Color('lightskyblue3')
     color_active = p.Color('dodgerblue2')
     color = color_inactive
-    active = True
     text = ""
     done = False
 
@@ -86,7 +117,6 @@ def promptUsername(screen, WIDTH, HEIGHT, current_name):
         screen.fill(p.Color("white"))
         prompt = font.render("Enter username:", True, p.Color("black"))
         screen.blit(prompt, (WIDTH // 2 - prompt.get_width() // 2, HEIGHT // 2 - 80))
-        # Draw input box
         p.draw.rect(screen, color, input_box, 2)
         txt_surface = font.render(text or current_name, True, p.Color("black"))
         screen.blit(txt_surface, (input_box.x + 10, input_box.y + 10))
@@ -94,6 +124,10 @@ def promptUsername(screen, WIDTH, HEIGHT, current_name):
     return current_name
 
 def main():
+    """
+    Main entry point for the chess application.
+    Handles the main loop, menu navigation, and game state transitions.
+    """
     global USERNAME
     p.init()
     loadImages()
@@ -160,7 +194,7 @@ def main():
             # Draw the offer draw and resign buttons
             p.draw.rect(screen, p.Color("gray"), OFFER_DRAW_BUTTON)
             p.draw.rect(screen, p.Color("gray"), RESIGN_BUTTON)
-            font_path = "font/DejaVuSans.ttf"  
+            font_path = "font/DejaVuSans.ttf"
             fontBtn = p.font.Font(font_path, 16)
             screen.blit(fontBtn.render("Offer Draw", True, p.Color("black")), (OFFER_DRAW_BUTTON.x + 40, OFFER_DRAW_BUTTON.y + 10))
             screen.blit(fontBtn.render("Resign", True, p.Color("black")), (RESIGN_BUTTON.x + 60, RESIGN_BUTTON.y + 10))
@@ -200,7 +234,6 @@ def main():
                                 elif e.type == p.MOUSEBUTTONDOWN:
                                     mouseX, mouseY = e.pos
                                     if yes_rect.collidepoint(mouseX, mouseY):
-                                        # Handle resignation (e.g., end game, update moveLog, etc.)
                                         winner = "Black" if gs.whiteToMove else "White"
                                         moveLog.append("0 - 1 (Give up)" if gs.whiteToMove else "1 - 0 (Give up)")
                                         endingScreen(screen, f"{winner} Wins (Opponent gave up)", gs, moveLog, positions)
@@ -208,7 +241,6 @@ def main():
                                         running = False
                                         break
                                     elif no_rect.collidepoint(mouseX, mouseY):
-                                        # Cancel resignation
                                         waiting = False
                                         break
                         continue
@@ -353,6 +385,15 @@ def main():
                 moveMade = False
 
 def startingMenu(screen):
+    """
+    Displays the main menu and handles user selection.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+
+    Returns:
+        tuple: (mode, color) where mode is a string and color is a bool or None.
+    """
     global USERNAME
     font_path = "font/DejaVuSans.ttf"
     font = p.font.Font(font_path, 36)
@@ -416,12 +457,15 @@ def startingMenu(screen):
 def endingScreen(screen, result, gs, moveLog, positions):
     """
     Display the ending screen with the result of the game.
+
     Parameters:
-    - screen: the Pygame screen
-    - result: a string indicating the result ("White Wins", "Black Wins", "Draw")
-    - gs: the current game state (to display the last board position)
+        screen (pygame.Surface): The Pygame display surface.
+        result (str): The result string ("White Wins", "Black Wins", "Draw").
+        gs (GameState): The current game state (to display the last board position).
+        moveLog (list): List of move notations.
+        positions (list): List of board positions.
     """
-    font_path = "font/DejaVuSans.ttf"  
+    font_path = "font/DejaVuSans.ttf"
     font = p.font.Font(font_path, 36)
     resultText = font.render(result, True, p.Color("black"))
     menuButton = p.Rect(WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50)
@@ -451,9 +495,15 @@ def endingScreen(screen, result, gs, moveLog, positions):
 def difficultyMenu(screen, text):
     """
     Display the difficulty selection menu for AI.
-    Returns: depth (int) or None if user chooses to go back.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        text (str): The title text for the menu.
+
+    Returns:
+        int or None: The selected AI depth, or None if user chooses to go back.
     """
-    font_path = "font/DejaVuSans.ttf"  
+    font_path = "font/DejaVuSans.ttf"
     font = p.font.Font(font_path, 36)
     titleText = font.render(text, True, p.Color("black"))
     easyButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 80, 350, 50)
@@ -492,7 +542,16 @@ def difficultyMenu(screen, text):
                     return None  # Signal to go back to main menu
 
 def replayMenuUI(screen):
-    font_path = "font/DejaVuSans.ttf"  
+    """
+    Display the replay menu for selecting and managing saved games.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+
+    Returns:
+        str or None: The selected save file path, or None if returning to menu.
+    """
+    font_path = "font/DejaVuSans.ttf"
     font = p.font.Font(font_path, 25)
     smallFont = p.font.Font(font_path, 18)
     manager = ReplayViewer.ReplayManager()
@@ -515,6 +574,12 @@ def replayMenuUI(screen):
     arrowRight = p.Rect(WIDTH // 2 + 20, arrowY, 40, 40)
 
     def get_page_files():
+        """
+        Returns the list of files for the current page.
+
+        Returns:
+            list: List of file paths for the current page.
+        """
         start = page * savesPerPage
         end = min(start + savesPerPage, len(files))
         return files[start:end]
@@ -622,6 +687,9 @@ def replayMenuUI(screen):
                         break  # Only allow one delete per click
 
 if __name__ == "__main__":
+    """
+    Entry point for the chess application.
+    """
     main()
 
 

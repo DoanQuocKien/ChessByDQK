@@ -1,6 +1,22 @@
+"""
+BoardDisplay.py
+
+Handles all drawing and UI display for the chess board, pieces, move logs, and in-game menus.
+
+Author: Doan Quoc Kien
+"""
+
 import pygame as p
 
 def drawBoard(screen, SQ_SIZE, DIMENSION):
+    """
+    Draws the chess board squares.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        SQ_SIZE (int): Size of each square.
+        DIMENSION (int): Number of squares per side.
+    """
     colors = [p.Color("white"), p.Color("gray")]
     for r in range(DIMENSION):
         for c in range(DIMENSION):
@@ -8,6 +24,16 @@ def drawBoard(screen, SQ_SIZE, DIMENSION):
             p.draw.rect(screen, color, p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
 def drawPieces(screen, board, IMAGES, SQ_SIZE, DIMENSION):
+    """
+    Draws the chess pieces on the board.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        board (list): 2D list representing the board.
+        IMAGES (dict): Dictionary of piece images.
+        SQ_SIZE (int): Size of each square.
+        DIMENSION (int): Number of squares per side.
+    """
     for r in range(DIMENSION):
         for c in range(DIMENSION):
             piece = board[r][c]
@@ -15,6 +41,16 @@ def drawPieces(screen, board, IMAGES, SQ_SIZE, DIMENSION):
                 screen.blit(IMAGES[int(piece)], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
 
 def highlightSquare(screen, gs, validMoves, sqSelected, SQ_SIZE):
+    """
+    Highlights the selected square and possible moves.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        gs (GameState): The current game state.
+        validMoves (list): List of valid moves.
+        sqSelected (tuple): Selected square (row, col).
+        SQ_SIZE (int): Size of each square.
+    """
     if sqSelected != ():
         r, c = sqSelected
         if (r < 0) or (r > 7) or (c < 0) or (c > 7):
@@ -30,11 +66,35 @@ def highlightSquare(screen, gs, validMoves, sqSelected, SQ_SIZE):
                     screen.blit(s, (move.endCol * SQ_SIZE, move.endRow * SQ_SIZE))
 
 def drawGameState(screen, gs, validMoves, sqSelected, IMAGES, SQ_SIZE, DIMENSION):
+    """
+    Draws the full game state including board, highlights, and pieces.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        gs (GameState): The current game state.
+        validMoves (list): List of valid moves.
+        sqSelected (tuple): Selected square (row, col).
+        IMAGES (dict): Dictionary of piece images.
+        SQ_SIZE (int): Size of each square.
+        DIMENSION (int): Number of squares per side.
+    """
     drawBoard(screen, SQ_SIZE, DIMENSION)
     highlightSquare(screen, gs, validMoves, sqSelected, SQ_SIZE)
     drawPieces(screen, gs.board, IMAGES, SQ_SIZE, DIMENSION)
 
 def drawMoveLog(screen, moveLog, moveLogPage, HEIGHT):
+    """
+    Draws the move log panel.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        moveLog (list): List of move notations.
+        moveLogPage (int): Current page of the move log.
+        HEIGHT (int): Height of the display.
+
+    Returns:
+        tuple: (upArrowRect, downArrowRect, totalPages)
+    """
     font = p.font.SysFont("Arial", 18, False, False)
     moveLogRect = p.Rect(514, 0, 186, HEIGHT)
     p.draw.rect(screen, p.Color("white"), moveLogRect)
@@ -53,27 +113,31 @@ def drawMoveLog(screen, moveLog, moveLogPage, HEIGHT):
     for i, text in enumerate(moveTexts[start:end]):
         textObj = font.render(text, True, p.Color("black"))
         screen.blit(textObj, (moveLogRect.x + 5, moveLogRect.y + 5 + 20 * i))
-    # Optionally return rects for up/down arrows if you use them
     return None, None, totalPages
 
 def promotionMenu(screen, IMAGES, SQ_SIZE, WIDTH, HEIGHT, color):
     """
-    Display a promotion menu for the player to choose a piece.
+    Displays the pawn promotion menu.
+
     Parameters:
-    - screen: the Pygame screen
-    - color: 'w' for white, 'b' for black
+        screen (pygame.Surface): The Pygame display surface.
+        IMAGES (dict): Dictionary of piece images.
+        SQ_SIZE (int): Size of each square.
+        WIDTH (int): Width of the display.
+        HEIGHT (int): Height of the display.
+        color (int): 1 for white, 2 for black.
+
     Returns:
-    - The chosen piece ('Q', 'R', 'B', 'N')
+        int: The chosen piece code.
     """
     options = [5, 4, 3, 2]
-    pieceImages = [IMAGES[color * 10 + option] for option in options]  # Get images for the promotion options
+    pieceImages = [IMAGES[color * 10 + option] for option in options]
     menuWidth = 4 * SQ_SIZE
     menuHeight = SQ_SIZE
     menuX = (WIDTH - menuWidth) // 2
     menuY = (HEIGHT - menuHeight) // 2
     optionRects = []
 
-    # Draw menu background
     p.draw.rect(screen, p.Color("gray"), (menuX, menuY, menuWidth, menuHeight))
     for i, pieceImage in enumerate(pieceImages):
         rect = p.Rect(menuX + i * SQ_SIZE, menuY, SQ_SIZE, SQ_SIZE)
@@ -82,7 +146,6 @@ def promotionMenu(screen, IMAGES, SQ_SIZE, WIDTH, HEIGHT, color):
 
     p.display.flip()
 
-    # Wait for player to click an option
     while True:
         for e in p.event.get():
             if e.type == p.MOUSEBUTTONDOWN:
@@ -92,7 +155,17 @@ def promotionMenu(screen, IMAGES, SQ_SIZE, WIDTH, HEIGHT, color):
                         return option
 
 def drawAcceptDrawBox(screen, WIDTH, HEIGHT):
-    import pygame as p
+    """
+    Draws a dialog box to accept a draw offer.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        WIDTH (int): Width of the display.
+        HEIGHT (int): Height of the display.
+
+    Returns:
+        tuple: (yes_rect, no_rect) for button detection.
+    """
     font = p.font.SysFont("Arial", 24)
     box = p.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 60, 300, 120)
     p.draw.rect(screen, p.Color("lightgray"), box)
@@ -109,14 +182,21 @@ def drawAcceptDrawBox(screen, WIDTH, HEIGHT):
 
 def drawResignBox(screen, WIDTH, HEIGHT):
     """
-    Draws a resign confirmation box and returns rects for Yes/No buttons.
+    Draws a resign confirmation box.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        WIDTH (int): Width of the display.
+        HEIGHT (int): Height of the display.
+
+    Returns:
+        tuple: (yes_rect, no_rect) for button detection.
     """
     font = p.font.SysFont("Arial", 24)
     box = p.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 50, 200, 100)
     p.draw.rect(screen, p.Color("lightgray"), box)
     p.draw.rect(screen, p.Color("black"), box, 2)
     text = font.render("Are you sure you want to resign?", True, p.Color("black"))
-    # Center the text horizontally in the box
     screen.blit(text, (box.x + (box.width - text.get_width()) // 2, box.y + 15))
     yes_rect = p.Rect(box.x + 20, box.y + 60, 60, 30)
     no_rect = p.Rect(box.x + 120, box.y + 60, 60, 30)
@@ -127,6 +207,22 @@ def drawResignBox(screen, WIDTH, HEIGHT):
     return yes_rect, no_rect
 
 def replayBoardUI(screen, replay_game, IMAGES, SQ_SIZE, DIMENSION, HEIGHT, WIDTH, navBarHeight=60):
+    """
+    Displays the replay board UI for reviewing saved games.
+
+    Parameters:
+        screen (pygame.Surface): The Pygame display surface.
+        replay_game (ReplayGame): The replay game object.
+        IMAGES (dict): Dictionary of piece images.
+        SQ_SIZE (int): Size of each square.
+        DIMENSION (int): Number of squares per side.
+        HEIGHT (int): Height of the display.
+        WIDTH (int): Width of the display.
+        navBarHeight (int): Height of the navigation bar.
+
+    Returns:
+        None
+    """
     import ChessEngine as CsE
     import pygame as p
 
@@ -187,6 +283,4 @@ def replayBoardUI(screen, replay_game, IMAGES, SQ_SIZE, DIMENSION, HEIGHT, WIDTH
                     moveLogPage = (moveLogPage - 1) % totalPages
                 elif e.key == p.K_DOWN:
                     moveLogPage = (moveLogPage + 1) % totalPages
-
-# Add any other board-related display functions here!
 

@@ -1,7 +1,11 @@
 """
-This file is responsible for operating an AI to play against the player
-"""
+SmartMoveFinder.py
 
+Provides AI move selection and board evaluation for the chess game.
+Implements NegaMax and MinMax algorithms, board scoring, and helper functions for computer play.
+
+Author: Doan Quoc Kien
+"""
 import numpy as np
 import random
 from multiprocessing import Queue, Pool
@@ -84,14 +88,28 @@ transpositionTable = {}
 
 def findRandomMove(validMoves):
     """
-    Returns a random move from the list of valid moves.
-    If no valid moves are available, returns None.
+    Selects and returns a random move from the list of valid moves.
+
+    Parameters:
+        validMoves (list): List of valid moves.
+
+    Returns:
+        Move or None: A randomly selected move, or None if no valid moves are available.
     """
     if not validMoves:  # Check if the list is empty
         return None
     return validMoves[random.randint(0, len(validMoves) - 1)]
 
 def parallelEvaluateMove(args):
+    """
+    Evaluates a move in parallel for multiprocessing.
+
+    Parameters:
+        args (tuple): (gs, move, depth, alpha, beta, turnMultiplier)
+
+    Returns:
+        tuple: (score (float), move)
+    """
     gs, move, depth, alpha, beta, turnMultiplier = args
     gs.makeMove(move)
     nextMoves = gs.getValidMoves()
@@ -101,7 +119,15 @@ def parallelEvaluateMove(args):
 
 def findBestMove(gs, validMoves, returnQueue):
     """
-    Helper method to make first recursive call
+    Finds the best move using NegaMax with alpha-beta pruning and multiprocessing.
+
+    Parameters:
+        gs (GameState): Current game state.
+        validMoves (list): List of valid moves.
+        returnQueue (multiprocessing.Queue): Queue to return the best move.
+
+    Returns:
+        None: The best move is put into returnQueue.
     """
     with Pool() as pool:
         results = pool.map(parallelEvaluateMove, [(gs, move, DEPTH, -CHECKMATE, CHECKMATE, 1 if gs.whiteToMove else -1) for move in validMoves])
@@ -111,7 +137,18 @@ def findBestMove(gs, validMoves, returnQueue):
 
 def findMoveNegaMaxAlphaBeta(gs, validMoves, depth, alpha, beta, turnMultiplier):
     """
-    Find the best move using NegaMax algorithm with Alpha-Beta pruning
+    Recursively searches for the best move using NegaMax with alpha-beta pruning.
+
+    Parameters:
+        gs (GameState): Current game state.
+        validMoves (list): List of valid moves.
+        depth (int): Search depth.
+        alpha (float): Alpha value for pruning.
+        beta (float): Beta value for pruning.
+        turnMultiplier (int): 1 for white, -1 for black.
+
+    Returns:
+        float: Evaluation score of the position.
     """
     global nextMove
     boardHash = hash(str(gs.board))
@@ -143,7 +180,13 @@ def findMoveNegaMaxAlphaBeta(gs, validMoves, depth, alpha, beta, turnMultiplier)
 
 def scoreBoard(gs):
     """
-    Score the board. A positive score is good for white, a negative score is good for black.
+    Evaluates and scores the board position.
+
+    Parameters:
+        gs (GameState): Current game state.
+
+    Returns:
+        float: Positive for white advantage, negative for black.
     """
     if gs.checkMate:
         if gs.whiteToMove:
@@ -203,8 +246,14 @@ def scoreBoard(gs):
 
 def evaluateKingSafety(gs, isWhite):
     """
-    Evaluate the safety of the king.
-    A king in the center or exposed to attacks is penalized.
+    Evaluates the safety of the king for a given side.
+
+    Parameters:
+        gs (GameState): Current game state.
+        isWhite (bool): True for white king, False for black king.
+
+    Returns:
+        float: King safety score (positive is safer).
     """
     kingPosition = gs.whiteKingLocation if isWhite else gs.blackKingLocation
     kingRow, kingCol = kingPosition
@@ -226,8 +275,13 @@ def evaluateKingSafety(gs, isWhite):
 
 def evaluatePawnStructure(gs):
     """
-    Evaluate the pawn structure.
-    Reward connected pawns and penalize isolated or doubled pawns.
+    Evaluates the pawn structure for both sides.
+
+    Parameters:
+        gs (GameState): Current game state.
+
+    Returns:
+        float: Pawn structure score (positive for white, negative for black).
     """
     score = 0
     whitePawns = [col for row in gs.board for col in row if col == 11]
@@ -260,7 +314,15 @@ def evaluatePawnStructure(gs):
 
 def findBestMoveMinMax(gs, validMoves, returnQueue):
     """
-    Helper method to make first recursive call
+    Finds the best move using the MinMax algorithm.
+
+    Parameters:
+        gs (GameState): Current game state.
+        validMoves (list): List of valid moves.
+        returnQueue (multiprocessing.Queue): Queue to return the best move.
+
+    Returns:
+        None: The best move is put into returnQueue.
     """
     global nextMove
     nextMove = None
@@ -270,7 +332,16 @@ def findBestMoveMinMax(gs, validMoves, returnQueue):
 
 def findMoveMinMax(gs, validMoves, depth, whiteToMove):
     """
-    Find the best move using MinMax algorithm
+    Recursively searches for the best move using MinMax.
+
+    Parameters:
+        gs (GameState): Current game state.
+        validMoves (list): List of valid moves.
+        depth (int): Search depth.
+        whiteToMove (bool): True if white's turn, False otherwise.
+
+    Returns:
+        float: Evaluation score of the position.
     """
     global nextMove
     if depth == 0:
@@ -304,8 +375,14 @@ def findMoveMinMax(gs, validMoves, depth, whiteToMove):
 
 def getMove(gs, validMoves):
     """
-    Get the best move for the current game state.
-    Returns None if no valid moves are available.
+    Gets the best move for the current game state using multiprocessing.
+
+    Parameters:
+        gs (GameState): Current game state.
+        validMoves (list): List of valid moves.
+
+    Returns:
+        Move or None: The best move, or None if no valid moves are available.
     """
     if not validMoves:  # Check if there are no valid moves
         return None
@@ -315,6 +392,16 @@ def getMove(gs, validMoves):
     return returnQueue.get()
 
 def orderMoves(gs, validMoves):
+    """
+    Orders moves based on a simple heuristic to improve search efficiency.
+
+    Parameters:
+        gs (GameState): Current game state.
+        validMoves (list): List of valid moves.
+
+    Returns:
+        list: Sorted list of moves (best first).
+    """
     def moveHeuristic(move):
         startScore = scoreBoard(gs)
         gs.makeMove(move)

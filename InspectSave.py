@@ -1,19 +1,34 @@
+"""
+InspectSave.py
+
+Provides utilities for inspecting and analyzing saved chess games.
+
+Author: Doan Quoc Kien
+"""
+
 import pickle
 
-# Replace with the path to your .pkl file
-filename = "saved_games/2025-05-15_23-19-49.pkl"
+def inspect_save(filepath):
+    """
+    Inspects and prints details of a saved game file.
 
-with open(filename, "rb") as f:
-    data = pickle.load(f)
+    Parameters:
+        filepath (str): Path to the saved game file.
 
-print("Keys in file:", data.keys())
-print("Number of moves:", len(data["moveLog"]))
-print("Number of positions:", len(data["positions"]))
+    Returns:
+        None
+    """
+    with open(filepath, "rb") as f:
+        data = pickle.load(f)
 
-# Print first move and first board position
-if data["moveLog"]:
-    print("First move:", data["moveLog"][0])
-if data["positions"]:
-    print("First board position:")
-    for row in data["positions"][0]:
-        print(row)
+    print("Keys in file:", data.keys())
+    print("Number of moves:", len(data["moveLog"]))
+    print("Number of positions:", len(data["positions"]))
+
+    # Print first move and first board position
+    if data["moveLog"]:
+        print("First move:", data["moveLog"][0])
+    if data["positions"]:
+        print("First board position:")
+        for row in data["positions"][0]:
+            print(row)
