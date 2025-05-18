@@ -8,6 +8,9 @@ Author: Doan Quoc Kien
 
 import pygame as p
 
+RESIGN_BUTTON = p.Rect(514, 470, 180, 35)
+OFFER_DRAW_BUTTON = p.Rect(514, 420, 180, 35)
+
 def drawBoard(screen, SQ_SIZE, DIMENSION):
     """
     Draws the chess board squares.
@@ -84,13 +87,7 @@ def drawGameState(screen, gs, validMoves, sqSelected, IMAGES, SQ_SIZE, DIMENSION
 
 def drawMoveLog(screen, moveLog, moveLogPage, HEIGHT):
     """
-    Draws the move log panel.
-
-    Parameters:
-        screen (pygame.Surface): The Pygame display surface.
-        moveLog (list): List of move notations.
-        moveLogPage (int): Current page of the move log.
-        HEIGHT (int): Height of the display.
+    Draws the move log panel with clickable up/down arrows, the Offer Draw and Resign button
 
     Returns:
         tuple: (upArrowRect, downArrowRect, totalPages)
@@ -105,15 +102,42 @@ def drawMoveLog(screen, moveLog, moveLogPage, HEIGHT):
         if i + 1 < len(moveLog):
             moveText += f" {moveLog[i + 1]}"
         moveTexts.append(moveText)
-    moveLogLinePerPage = 15
+    moveLogLinePerPage = 3
     totalPages = max(1, (len(moveTexts) + moveLogLinePerPage - 1) // moveLogLinePerPage)
     moveLogPage = moveLogPage % totalPages
+
     start = moveLogPage * moveLogLinePerPage
     end = min(start + moveLogLinePerPage, len(moveTexts))
     for i, text in enumerate(moveTexts[start:end]):
         textObj = font.render(text, True, p.Color("black"))
         screen.blit(textObj, (moveLogRect.x + 5, moveLogRect.y + 5 + 20 * i))
-    return None, None, totalPages
+
+    # Draw the offer draw and resign buttons
+    p.draw.rect(screen, p.Color("gray"), OFFER_DRAW_BUTTON)
+    p.draw.rect(screen, p.Color("gray"), RESIGN_BUTTON)
+    font_path = "font/DejaVuSans.ttf"
+    fontBtn = p.font.Font(font_path, 16)
+    screen.blit(fontBtn.render("Offer Draw", True, p.Color("black")), (OFFER_DRAW_BUTTON.x + 40, OFFER_DRAW_BUTTON.y + 10))
+    screen.blit(fontBtn.render("Resign", True, p.Color("black")), (RESIGN_BUTTON.x + 60, RESIGN_BUTTON.y + 10))
+
+    upArrowRect = None
+    downArrowRect = None
+    if totalPages > 1:
+        # Draw up arrow
+        upArrowRect = p.Rect(OFFER_DRAW_BUTTON.x + 30, OFFER_DRAW_BUTTON.y - 20, 30, 10)
+        p.draw.polygon(screen, p.Color("gray"), [
+            (upArrowRect.centerx, upArrowRect.y),
+            (upArrowRect.x, upArrowRect.bottom),
+            (upArrowRect.right, upArrowRect.bottom)
+        ])
+        # Draw down arrow
+        downArrowRect = p.Rect(OFFER_DRAW_BUTTON.x + 120, OFFER_DRAW_BUTTON.y - 20, 30, 10)
+        p.draw.polygon(screen, p.Color("gray"), [
+            (downArrowRect.x, downArrowRect.y),
+            (downArrowRect.right, downArrowRect.y),
+            (downArrowRect.centerx, downArrowRect.bottom)
+        ])
+    return upArrowRect, downArrowRect, totalPages
 
 def promotionMenu(screen, IMAGES, SQ_SIZE, WIDTH, HEIGHT, color):
     """
@@ -167,13 +191,13 @@ def drawAcceptDrawBox(screen, WIDTH, HEIGHT):
         tuple: (yes_rect, no_rect) for button detection.
     """
     font = p.font.SysFont("Arial", 24)
-    box = p.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 60, 300, 120)
+    box = p.Rect(WIDTH // 2 - 200, HEIGHT // 2 - 50, 400, 100)
     p.draw.rect(screen, p.Color("lightgray"), box)
     p.draw.rect(screen, p.Color("black"), box, 2)
     text = font.render("Accept draw offer?", True, p.Color("black"))
     screen.blit(text, (box.x + (box.width - text.get_width()) // 2, box.y + 20))
-    yes_rect = p.Rect(box.x + 30, box.y + 70, 80, 30)
-    no_rect = p.Rect(box.x + 190, box.y + 70, 80, 30)
+    yes_rect = p.Rect(box.x + 110, box.y + 60, 80, 30)
+    no_rect = p.Rect(box.x + 210, box.y + 60, 80, 30)
     p.draw.rect(screen, p.Color("green"), yes_rect)
     p.draw.rect(screen, p.Color("red"), no_rect)
     screen.blit(font.render("Yes", True, p.Color("white")), (yes_rect.x + 15, yes_rect.y + 5))
@@ -193,13 +217,13 @@ def drawResignBox(screen, WIDTH, HEIGHT):
         tuple: (yes_rect, no_rect) for button detection.
     """
     font = p.font.SysFont("Arial", 24)
-    box = p.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 50, 200, 100)
+    box = p.Rect(WIDTH // 2 - 200, HEIGHT // 2 - 50, 400, 100)
     p.draw.rect(screen, p.Color("lightgray"), box)
     p.draw.rect(screen, p.Color("black"), box, 2)
     text = font.render("Are you sure you want to resign?", True, p.Color("black"))
     screen.blit(text, (box.x + (box.width - text.get_width()) // 2, box.y + 15))
-    yes_rect = p.Rect(box.x + 20, box.y + 60, 60, 30)
-    no_rect = p.Rect(box.x + 120, box.y + 60, 60, 30)
+    yes_rect = p.Rect(box.x + 110, box.y + 60, 60, 30)
+    no_rect = p.Rect(box.x + 210, box.y + 60, 60, 30)
     p.draw.rect(screen, p.Color("green"), yes_rect)
     p.draw.rect(screen, p.Color("red"), no_rect)
     screen.blit(font.render("Yes", True, p.Color("white")), (yes_rect.x + 10, yes_rect.y + 5))

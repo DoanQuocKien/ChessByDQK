@@ -26,9 +26,6 @@ SQ_SIZE = HEIGHT // DIMENSION
 MAX_FPS = 15
 IMAGES = {}
 
-RESIGN_BUTTON = p.Rect(514, 470, 180, 35)
-OFFER_DRAW_BUTTON = p.Rect(514, 420, 180, 35)
-
 USERNAME = "Guest"
 
 pieces = {
@@ -39,6 +36,9 @@ pieceChoose = {
     "wp": 11, "wK": 12, "wB": 13, "wR": 14, "wQ": 15, "wK": 16,
     "bp": 21, "bK": 22, "bB": 23, "bR": 24, "bQ": 25, "bK": 26
 }
+
+ai_draw_status = None  # None, "considering", or "rejected"
+ai_draw_status_time = 0
 
 def loadImages():
     """
@@ -191,14 +191,6 @@ def main():
             screen.fill(p.Color("white"))
             upArrowRect, downArrowRect, totalPages = BoardDisplay.drawMoveLog(screen, moveLog, moveLogPage, HEIGHT)
             BoardDisplay.drawGameState(screen, gs, validMoves, squareSelected, IMAGES, SQ_SIZE, DIMENSION)
-            # Draw the offer draw and resign buttons
-            p.draw.rect(screen, p.Color("gray"), OFFER_DRAW_BUTTON)
-            p.draw.rect(screen, p.Color("gray"), RESIGN_BUTTON)
-            font_path = "font/DejaVuSans.ttf"
-            fontBtn = p.font.Font(font_path, 16)
-            screen.blit(fontBtn.render("Offer Draw", True, p.Color("black")), (OFFER_DRAW_BUTTON.x + 40, OFFER_DRAW_BUTTON.y + 10))
-            screen.blit(fontBtn.render("Resign", True, p.Color("black")), (RESIGN_BUTTON.x + 60, RESIGN_BUTTON.y + 10))
-
             p.display.flip()
 
             humanTurn = (gs.whiteToMove and playerOne) or (not gs.whiteToMove and playerTwo)
@@ -209,7 +201,7 @@ def main():
                     exit()
                 elif e.type == p.MOUSEBUTTONDOWN:
                     mouseX, mouseY = e.pos
-                    if OFFER_DRAW_BUTTON.collidepoint(mouseX, mouseY):
+                    if BoardDisplay.OFFER_DRAW_BUTTON.collidepoint(mouseX, mouseY):
                         if not drawOfferPending:
                             drawOfferPending = True
                             drawOfferedBy = "white" if gs.whiteToMove else "black"
@@ -221,7 +213,7 @@ def main():
                                         endingScreen(screen, "Draw", gs, moveLog, positions)
                                         break
                         continue
-                    if RESIGN_BUTTON.collidepoint(mouseX, mouseY):
+                    if BoardDisplay.RESIGN_BUTTON.collidepoint(mouseX, mouseY):
                         # Show resign confirmation box
                         yes_rect, no_rect = BoardDisplay.drawResignBox(screen, WIDTH, HEIGHT)
                         p.display.flip()
@@ -245,7 +237,7 @@ def main():
                                         break
                         continue
                     if upArrowRect and upArrowRect.collidepoint(mouseX, mouseY):
-                        moveLogPage = 0
+                        moveLogPage = (moveLogPage - 1) % totalPages
                         continue
                     if downArrowRect and downArrowRect.collidepoint(mouseX, mouseY):
                         moveLogPage = (moveLogPage + 1) % totalPages
@@ -267,9 +259,9 @@ def main():
                                     if move == possible_move:
                                         move = copy.deepcopy(possible_move)
                                         promotionChoice = None
-                                        if possible_move.pawnPromotion:
+                                        if possible_move.isPawnPromotion:
                                             promotionChoice = BoardDisplay.promotionMenu(
-                                                screen, 1 if gs.whiteToMove else 2, IMAGES, SQ_SIZE, WIDTH, HEIGHT
+                                                screen, IMAGES, SQ_SIZE, WIDTH, HEIGHT, 1 if gs.whiteToMove else 2
                                             )
                                         move.promotionChoice = promotionChoice
                                         gs.makeMove(move)
@@ -296,27 +288,74 @@ def main():
                 endingScreen(screen, f"{winner} Wins (Opponent gave up)", gs, moveLog, positions)
                 break
 
-            if drawOfferPending and humanTurn and drawOfferedBy != ("white" if gs.whiteToMove else "black"):
-                yes_rect, no_rect = BoardDisplay.drawAcceptDrawBox(screen, WIDTH, HEIGHT)
-                p.display.flip()
-                waiting = True
-                while waiting:
-                    for e in p.event.get():
-                        if e.type == p.QUIT:
-                            p.quit()
-                            exit()
-                        elif e.type == p.MOUSEBUTTONDOWN:
-                            mouseX, mouseY = e.pos
-                            if yes_rect.collidepoint(mouseX, mouseY):
-                                moveLog.append("1/2 - 1/2 (Draw agreed)")
-                                endingScreen(screen, "Draw", gs, moveLog, positions)
+            if drawOfferPending and drawOfferedBy != ("white" if gs.whiteToMove else "black"):
+                if mode == "pvp":
+                    # Prompt the human to accept or reject the draw
+                    yes_rect, no_rect = BoardDisplay.drawAcceptDrawBox(screen, WIDTH, HEIGHT)
+                    p.display.flip()
+                    waiting = True
+                    while waiting:
+                        for e in p.event.get():
+                            if e.type == p.QUIT:
+                                p.quit()
+                                exit()
+                            elif e.type == p.MOUSEBUTTONDOWN:
+                                mouseX, mouseY = e.pos
+                                if yes_rect.collidepoint(mouseX, mouseY):
+                                    moveLog.append("1/2 - 1/2 (Draw agreed)")
+                                    endingScreen(screen, "Draw", gs, moveLog, positions)
+                                    waiting = False
+                                    running = False
+                                    break
+                                elif no_rect.collidepoint(mouseX, mouseY):
+                                    drawOfferPending = False
+                                    waiting = False
+                                    break
+                else:
+                    # Let the AI consider the draw
+                    ai_draw_status_time = time.time()
+                    p.display.flip()
+                    waiting = True
+                    while waiting:
+                        for e in p.event.get():
+                            if e.type == p.QUIT:
+                                p.quit()
+                                exit()
+                        fontBtn = p.font.Font("font/DejaVuSans.ttf", 16)
+                        status_text = fontBtn.render("AI consider accepting draw...", True, p.Color("black"))
+                        # Clear the area before drawing the text
+                        clear_rect = p.Rect(BoardDisplay.RESIGN_BUTTON.x - 40, BoardDisplay.RESIGN_BUTTON.y + 35, 200, 30)
+                        p.draw.rect(screen, p.Color("white"), clear_rect)
+                        screen.blit(status_text, (BoardDisplay.RESIGN_BUTTON.x - 30, BoardDisplay.RESIGN_BUTTON.y + 40))
+                        p.display.flip()
+                        if time.time() - ai_draw_status_time > 1.5:
+                            waiting = False
+
+                    ai_score = SmartMoveFinder.scoreBoard(gs)
+                    if len(moveLog) >= 80 and ((gs.whiteToMove and ai_score <= 0) or (not gs.whiteToMove and ai_score >= 0)):
+                        moveLog.append("1/2 - 1/2 (Draw agreed)")
+                        endingScreen(screen, "Draw", gs, moveLog, positions)
+                        running = False
+                    else:
+                        ai_draw_status = "rejected"
+                        ai_draw_status_time = time.time()
+                        # Turn off "considering" status immediately
+                        # Show "AI rejected" for 1.5 seconds
+                        waiting = True
+                        while waiting:
+                            for e in p.event.get():
+                                if e.type == p.QUIT:
+                                    p.quit()
+                                    exit()
+                            fontBtn = p.font.Font("font/DejaVuSans.ttf", 16)
+                            status_text = fontBtn.render("AI rejected", True, p.Color("red"))
+                            clear_rect = p.Rect(BoardDisplay.RESIGN_BUTTON.x - 40, BoardDisplay.RESIGN_BUTTON.y + 35, 200, 30)
+                            p.draw.rect(screen, p.Color("white"), clear_rect)
+                            screen.blit(status_text, (BoardDisplay.RESIGN_BUTTON.x - 30, BoardDisplay.RESIGN_BUTTON.y + 40))
+                            p.display.flip()
+                            if time.time() - ai_draw_status_time > 1.5:
                                 waiting = False
-                                running = False
-                                break
-                            elif no_rect.collidepoint(mouseX, mouseY):
-                                drawOfferPending = False
-                                waiting = False
-                                break
+                        drawOfferPending = False
 
             if moveMade:
                 validMoves = gs.getValidMoves()
@@ -466,8 +505,9 @@ def endingScreen(screen, result, gs, moveLog, positions):
         positions (list): List of board positions.
     """
     font_path = "font/DejaVuSans.ttf"
-    font = p.font.Font(font_path, 36)
-    resultText = font.render(result, True, p.Color("black"))
+    font_display = p.font.Font(font_path, 36)
+    font_menu = p.font.Font(font_path, 30)
+    resultText = font_display.render(result, True, p.Color("black"))
     menuButton = p.Rect(WIDTH // 2 - 125, HEIGHT // 2 + 50, 250, 50)
     overlay = p.Surface((WIDTH, HEIGHT))
     overlay.set_alpha(150)
@@ -480,8 +520,8 @@ def endingScreen(screen, result, gs, moveLog, positions):
         screen.blit(overlay, (0, 0))
         screen.blit(resultText, (WIDTH // 2 - resultText.get_width() // 2, HEIGHT // 3))
         p.draw.rect(screen, p.Color("gray"), menuButton)
-        menuText = font.render("Back to Menu", True, p.Color("black"))
-        screen.blit(menuText, (menuButton.x + 35, menuButton.y + 5))
+        menuText = font_menu.render("Back to Menu", True, p.Color("black"))
+        screen.blit(menuText, (menuButton.x + 15, menuButton.y + 10))
         p.display.flip()
         for e in p.event.get():
             if e.type == p.QUIT:
