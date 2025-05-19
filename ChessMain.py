@@ -7,6 +7,15 @@ and user interface. Each username has a separate save folder.
 Author: Doan Quoc Kien
 """
 
+import os, sys
+import multiprocessing
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and PyInstaller .exe """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 import pygame as p
 import ChessEngine as CsE
 import copy
@@ -14,7 +23,6 @@ import SmartMoveFinder
 import BoardDisplay
 import time
 import ReplayViewer
-import os
 import pickle
 from datetime import datetime
 
@@ -45,7 +53,7 @@ def loadImages():
     Loads chess piece images into the global IMAGES dictionary.
     """
     for piece, filename in pieces.items():
-        IMAGES[piece] = p.transform.scale(p.image.load(f"images/{filename}.png"), (SQ_SIZE, SQ_SIZE))
+        IMAGES[piece] = p.transform.scale(p.image.load(resource_path(f"images/{filename}.png")), (SQ_SIZE, SQ_SIZE))
 
 def get_save_dir():
     """
@@ -54,7 +62,9 @@ def get_save_dir():
     Returns:
         str: Path to the user's save directory.
     """
-    return os.path.join("saved_games", USERNAME)
+    local_appdata = os.getenv('LOCALAPPDATA')  # C:\Users\<User>\AppData\Local
+    save_path = os.path.join(local_appdata, "ChessGame", "saved_games", USERNAME)
+    return save_path
 
 def saveGame(moveLog, positions):
     """
@@ -86,7 +96,7 @@ def promptUsername(screen, WIDTH, HEIGHT, current_name):
     Returns:
         str: The new username entered by the user, or the current name if cancelled.
     """
-    font_path = "font/DejaVuSans.ttf"
+    font_path = resource_path("font/DejaVuSans.ttf")
     font = p.font.Font(font_path, 32)
     input_box = p.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 30, 300, 50)
     color_inactive = p.Color('lightskyblue3')
@@ -143,7 +153,7 @@ def main():
                 selected_file = replayMenuUI(screen)
                 if not selected_file:
                     break
-                replay_game = ReplayViewer.ReplayManager().load_game(selected_file)
+                replay_game = ReplayViewer.ReplayManager(get_save_dir()).load_game(selected_file)
                 BoardDisplay.replayBoardUI(screen, replay_game, IMAGES, SQ_SIZE, DIMENSION, HEIGHT, WIDTH)
             continue
 
@@ -321,7 +331,7 @@ def main():
                             if e.type == p.QUIT:
                                 p.quit()
                                 exit()
-                        fontBtn = p.font.Font("font/DejaVuSans.ttf", 16)
+                        fontBtn = p.font.Font(resource_path("font/DejaVuSans.ttf"), 16)
                         status_text = fontBtn.render("AI consider accepting draw...", True, p.Color("black"))
                         # Clear the area before drawing the text
                         clear_rect = p.Rect(BoardDisplay.RESIGN_BUTTON.x - 40, BoardDisplay.RESIGN_BUTTON.y + 35, 200, 30)
@@ -347,7 +357,7 @@ def main():
                                 if e.type == p.QUIT:
                                     p.quit()
                                     exit()
-                            fontBtn = p.font.Font("font/DejaVuSans.ttf", 16)
+                            fontBtn = p.font.Font(resource_path("font/DejaVuSans.ttf"), 16)
                             status_text = fontBtn.render("AI rejected", True, p.Color("red"))
                             clear_rect = p.Rect(BoardDisplay.RESIGN_BUTTON.x - 40, BoardDisplay.RESIGN_BUTTON.y + 35, 200, 30)
                             p.draw.rect(screen, p.Color("white"), clear_rect)
@@ -434,7 +444,7 @@ def startingMenu(screen):
         tuple: (mode, color) where mode is a string and color is a bool or None.
     """
     global USERNAME
-    font_path = "font/DejaVuSans.ttf"
+    font_path = resource_path("font/DejaVuSans.ttf")
     font = p.font.Font(font_path, 36)
     fontBtn = p.font.Font(font_path, 28)
     fontBtnUser = p.font.Font(font_path, 20)
@@ -504,7 +514,7 @@ def endingScreen(screen, result, gs, moveLog, positions):
         moveLog (list): List of move notations.
         positions (list): List of board positions.
     """
-    font_path = "font/DejaVuSans.ttf"
+    font_path = resource_path("font/DejaVuSans.ttf")
     font_display = p.font.Font(font_path, 36)
     font_menu = p.font.Font(font_path, 30)
     resultText = font_display.render(result, True, p.Color("black"))
@@ -543,7 +553,7 @@ def difficultyMenu(screen, text):
     Returns:
         int or None: The selected AI depth, or None if user chooses to go back.
     """
-    font_path = "font/DejaVuSans.ttf"
+    font_path = resource_path("font/DejaVuSans.ttf")
     font = p.font.Font(font_path, 36)
     titleText = font.render(text, True, p.Color("black"))
     easyButton = p.Rect(WIDTH // 2 - 175, HEIGHT // 2 - 80, 350, 50)
@@ -591,11 +601,11 @@ def replayMenuUI(screen):
     Returns:
         str or None: The selected save file path, or None if returning to menu.
     """
-    font_path = "font/DejaVuSans.ttf"
+    font_path = resource_path("font/DejaVuSans.ttf")
     font = p.font.Font(font_path, 25)
     smallFont = p.font.Font(font_path, 18)
-    manager = ReplayViewer.ReplayManager()
-    files = manager.list_games(get_save_dir())
+    manager = ReplayViewer.ReplayManager(get_save_dir())
+    files = manager.list_games()
     if not files:
         screen.fill(p.Color("white"))
         msg = font.render("No saved games found.", True, p.Color("black"))
@@ -730,6 +740,20 @@ if __name__ == "__main__":
     """
     Entry point for the chess application.
     """
+    multiprocessing.freeze_support()
+    # Retrieve the path to AppData\Local
+    appdata_local = os.getenv('LOCALAPPDATA')  # Typically C:\Users\<Username>\AppData\Local
+
+    # Define your application's save directory
+    save_folder = os.path.join(appdata_local, "ChessGame", "saved_games")
+
+    # Create the directory if it doesn't exist
+    os.makedirs(save_folder, exist_ok=True)
+
+    # Example: Save a game file
+    save_path = os.path.join(save_folder, "README.txt")
+    with open(save_path, 'w') as f:
+        f.write("This is where all games saved.")
     main()
 
 

@@ -11,7 +11,7 @@ import pickle
 import copy
 import ChessEngine as CsE
 
-SAVE_DIR = "saved_games"
+SAVE_DIR = os.path.join(os.getenv('LOCALAPPDATA'), "ChessGame", "saved_games")
 
 class ReplayGame:
     """
@@ -37,29 +37,19 @@ class ReplayManager:
     """
     Manages replay (saved) games for different users.
     """
-    def __init__(self):
-        self.games = self._get_saved_games()
+    def __init__(self, savedDirectory):
+        self.savedDirectory = savedDirectory
 
-    def _get_saved_games(self):
-        if not os.path.exists(SAVE_DIR):
-            os.makedirs(SAVE_DIR)
-        files = [f for f in os.listdir(SAVE_DIR) if f.endswith(".pkl")]
-        files.sort()
-        return [os.path.join(SAVE_DIR, f) for f in files]
-
-    def list_games(self, directory=SAVE_DIR):
+    def list_games(self):
         """
         Lists all saved game files in the given directory.
-
-        Parameters:
-            directory (str): Path to the user's save directory.
 
         Returns:
             list: List of file paths for saved games.
         """
-        if not os.path.exists(directory):
-            return []
-        return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".pkl")]
+        if not os.path.exists(self.savedDirectory):
+            os.makedirs(self.savedDirectory)
+        return [os.path.join(self.savedDirectory, f) for f in os.listdir(self.savedDirectory) if f.endswith(".pkl")]
 
     def load_game(self, filepath):
         """
@@ -73,5 +63,5 @@ class ReplayManager:
         """
         return ReplayGame(filepath)
 
-manager = ReplayManager()
+manager = ReplayManager(SAVE_DIR)
 files = manager.list_games()

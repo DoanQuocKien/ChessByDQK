@@ -7,9 +7,16 @@ Author: Doan Quoc Kien
 """
 
 import pygame as p
+import os, sys
 
 RESIGN_BUTTON = p.Rect(514, 470, 180, 35)
 OFFER_DRAW_BUTTON = p.Rect(514, 420, 180, 35)
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and PyInstaller .exe """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 def drawBoard(screen, SQ_SIZE, DIMENSION):
     """
@@ -102,7 +109,7 @@ def drawMoveLog(screen, moveLog, moveLogPage, HEIGHT):
         if i + 1 < len(moveLog):
             moveText += f" {moveLog[i + 1]}"
         moveTexts.append(moveText)
-    moveLogLinePerPage = 3
+    moveLogLinePerPage = 15
     totalPages = max(1, (len(moveTexts) + moveLogLinePerPage - 1) // moveLogLinePerPage)
     moveLogPage = moveLogPage % totalPages
 
@@ -115,7 +122,7 @@ def drawMoveLog(screen, moveLog, moveLogPage, HEIGHT):
     # Draw the offer draw and resign buttons
     p.draw.rect(screen, p.Color("gray"), OFFER_DRAW_BUTTON)
     p.draw.rect(screen, p.Color("gray"), RESIGN_BUTTON)
-    font_path = "font/DejaVuSans.ttf"
+    font_path = resource_path("font/DejaVuSans.ttf")
     fontBtn = p.font.Font(font_path, 16)
     screen.blit(fontBtn.render("Offer Draw", True, p.Color("black")), (OFFER_DRAW_BUTTON.x + 40, OFFER_DRAW_BUTTON.y + 10))
     screen.blit(fontBtn.render("Resign", True, p.Color("black")), (RESIGN_BUTTON.x + 60, RESIGN_BUTTON.y + 10))
