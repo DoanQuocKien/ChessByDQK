@@ -364,7 +364,7 @@ class GameState():
                 self.checkMate = True
             else:
                 self.draw = True
-        elif self.fiftyMoveCounter >= 50:
+        elif self.fiftyMoveCounter >= 100:
             self.draw = True
             print("Draw by 50-move rule")
         elif any(count >= 3 for count in list(self.positionCounts.values())):
